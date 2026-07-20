@@ -1,0 +1,21 @@
+{
+  "venvPath": "C:\\Users\\IT\\AppData\\Local\\Programs\\Python",
+  "venv": "Python314",
+  "extraPaths": [
+    "services/api-gateway/src",
+    "services/ingestion-service/src",
+    "services/dashboard-bff/src",
+    "services/orchestration/src",
+    "services/voice-gateway/src",
+    "services/panel-service/src",
+    "services/memory-service/src",
+    "services/governance-service/src",
+    "services/safety-proxy/src",
+    "services/sibling-training/src"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "."
+    }
+  ]
+}
