@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guardian Governance & Safety Console | Vadi-Pehn</title>
+    <meta name="description" content="Vadi-Pehn Guardian Governance & Safety SLA Console">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="guardian.css">
+</head>
+<body>
+    <div class="guardian-app">
+        <header class="guardian-header">
+            <div class="brand">
+                <div class="shield-icon">&#128737;</div>
+                <div>
+                    <h1>Guardian Governance & SLA Console</h1>
+                    <p class="subtitle">PRD §3.2 Verified Guardian Account Surface &bull; SLA Triage</p>
+                </div>
+            </div>
+
+            <div class="auth-bar" id="auth-status-bar">
+                <span class="status-badge unverified" id="auth-status-badge">NOT AUTHENTICATED</span>
+                <button class="btn-primary" onclick="showEnrollModal()">Verify Guardian Identity</button>
+            </div>
+        </header>
+
+        <!-- Enrollment Modal / Surface -->
+        <div class="modal hidden" id="enroll-modal">
+            <div class="modal-content">
+                <h2>Guardian Verification & Enrollment (PRD §3.2)</h2>
+                <p class="modal-desc">Verify your guardian account using lightweight auditable enrollment (NGO Co-signature, OTP, or Partner Site).</p>
+                
+                <form id="enroll-form" onsubmit="handleEnrollGuardian(event)">
+                    <div class="form-group">
+                        <label>Guardian Full Name:</label>
+                        <input type="text" id="g-name" value="Ramesh Kumar" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number / Contact:</label>
+                        <input type="text" id="g-phone" value="+91 98765 43210" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Verification Method:</label>
+                        <select id="g-method">
+                            <option value="ngo_cosign" selected>NGO Caseworker Co-signature</option>
+                            <option value="guardian_otp">Guardian Phone OTP</option>
+                            <option value="in_person">In-Person Partner Site Verification</option>
+                        </select>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="hideEnrollModal()">Cancel</button>
+                        <button type="submit" class="btn-primary">Verify & Obtain Guardian Token</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <main class="dashboard-grid">
+            <!-- Provision Child Account Section -->
+            <div class="card">
+                <h2>Provision Minor Learner Account (PRD §3.2)</h2>
+                <p class="card-desc">Minor accounts cannot self-signup; they must be provisioned by a verified guardian.</p>
+                
+                <form id="provision-form" onsubmit="handleProvisionLearner(event)">
+                    <div class="form-group">
+                        <label>Minor Display Name:</label>
+                        <input type="text" id="l-name" value="Alex" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Age Band:</label>
+                        <select id="l-band">
+                            <option value="1">Band 1 (Ages 8-10)</option>
+                            <option value="2" selected>Band 2 (Ages 11-13)</option>
+                            <option value="3">Band 3 (Ages 14-17)</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-primary" id="btn-provision">Provision Child Account & Issue Token</button>
+                </form>
+
+                <div class="result-box hidden" id="learner-token-box">
+                    <strong>Child Session Token Issued:</strong>
+                    <code id="issued-child-token">jwt_learner_token_sample...</code>
+                    <p class="note">Copy this token to launch the Child Companion App (/child/).</p>
+                </div>
+            </div>
+
+            <!-- Granular Consent Ledger -->
+            <div class="card">
+                <h2>Consent Ledger Management (PRD §3.2)</h2>
+                <p class="card-desc">Independently revocable consent types. Withdrawal triggers data deletion jobs.</p>
+                
+                <div class="consent-list">
+                    <div class="consent-row">
+                        <div>
+                            <strong>Conversational Storage</strong>
+                            <p>Rolling 18mo vector retention</p>
+                        </div>
+                        <button class="btn-toggle active" onclick="toggleConsentRow('conversation_storage', this)">GRANTED</button>
+                    </div>
+                    <div class="consent-row">
+                        <div>
+                            <strong>Document Ingestion</strong>
+                            <p>olmOCR report card extraction</p>
+                        </div>
+                        <button class="btn-toggle active" onclick="toggleConsentRow('document_ingestion', this)">GRANTED</button>
+                    </div>
+                    <div class="consent-row">
+                        <div>
+                            <strong>Voice Turn Recording</strong>
+                            <p>LiveKit WebRTC streams (0 storage)</p>
+                        </div>
+                        <button class="btn-toggle active" onclick="toggleConsentRow('voice_recording', this)">GRANTED</button>
+                    </div>
+                    <div class="consent-row">
+                        <div>
+                            <strong>Career Mentors Handoff</strong>
+                            <p>Introduction to simulated professionals</p>
+                        </div>
+                        <button class="btn-toggle active" onclick="toggleConsentRow('career_introductions', this)">GRANTED</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Safety Incident SLA Queue -->
+            <div class="card full-width">
+                <div class="card-header">
+                    <h2>Safety Incident SLA Queue (PRD §3.3)</h2>
+                    <span class="badge-sla">15-MINUTE MANDATORY SLA</span>
+                </div>
+                
+                <table class="incident-table">
+                    <thead>
+                        <tr>
+                            <th>Incident ID</th>
+                            <th>Severity</th>
+                            <th>Excerpt</th>
+                            <th>Created At</th>
+                            <th>SLA Deadline</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>inc_self_harm_01</code></td>
+                            <td><span class="badge-sev high">self_harm</span></td>
+                            <td>"main sun raha hoon... jo tum share kar rahe ho..."</td>
+                            <td>2 mins ago</td>
+                            <td><span class="sla-timer">12m 48s</span></td>
+                            <td><button class="btn-action" onclick="ackIncident('inc_self_harm_01')">Acknowledge Incident</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script src="guardian.js"></script>
+</body>
+</html>

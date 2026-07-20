@@ -1,0 +1,20 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "ingestion-service"
+version = "0.1.0"
+description = "Multi-Modal Document Ingestion & PII Redaction Service for Vadi-Pehn"
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.22.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.24.0",
+]
+readme = "README.md"
+authors = [{ name = "Vadi-Pehn Team" }]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

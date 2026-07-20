@@ -1,0 +1,27 @@
+# Colang 2.x rails for Vadi-Pehn child safety enforcement
+# Implements: PRD §8.1 (Input Guard & Jailbreak), PRD §8.2 (Output Guard), SD §4.3
+# Child Safety Non-Negotiable #1, #2: No safety bypass, fail-closed always.
+
+define flow check child input safety
+  $safety_verdict = execute check_input_classifier(message_text=$user_message, age_band=$age_band)
+  if $safety_verdict == "unsafe_self_harm"
+    bot say "I care about you so much, but I am an AI and cannot help with what you are feeling right now. Please talk to your guardian, a trusted teacher, or call a local emergency helpline immediately."
+    abort
+  else if $safety_verdict == "unsafe_general"
+    bot say "That topic isn't safe or appropriate for us to discuss. Let's talk about something else like school, hobbies, or careers!"
+    abort
+  else if $safety_verdict == "classifier_unavailable"
+    bot say "I'm having a little trouble connecting right now. Let's pause and talk again in a few minutes!"
+    abort
+
+define flow check jailbreak attempts
+  $is_jailbreak = execute check_jailbreak_classifier(message_text=$user_message)
+  if $is_jailbreak == true
+    bot say "Nice try! But I only talk about fun, safe, and helpful topics like learning, hobbies, and your future career."
+    abort
+
+define flow check child output safety
+  $output_verdict = execute check_output_classifier(draft_text=$bot_message)
+  if $output_verdict != "safe"
+    $bot_message = "I'm thinking about how best to answer that. Let's explore a fun topic or talk about your career goals while I check!"
+    abort

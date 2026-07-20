@@ -1,0 +1,121 @@
+version: "3.8"
+
+services:
+  # ── GPU 0 Allocation: Main Sibling LLM ──
+  vllm-main:
+    image: vllm/vllm-openai:latest
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── GPU 1 Allocation: Classifier + OCR + TTS ──
+  vllm-classifier:
+    image: vllm/vllm-openai:latest
+    environment:
+      - CUDA_VISIBLE_DEVICES=1
+    ports:
+      - "8002:8000"
+
+  kokoro-tts:
+    image: kokoro-fastapi:latest
+    environment:
+      - CUDA_VISIBLE_DEVICES=1
+    ports:
+      - "8004:8000"
+
+  olmocr-worker:
+    image: qwen2-vl-7b-olmocr:latest
+    environment:
+      - CUDA_VISIBLE_DEVICES=1
+    ports:
+      - "8005:8000"
+
+  # ── Safety Proxy (Mandatory Network Pre-Filter) ──
+  safety-proxy:
+    build:
+      context: ../services/safety-proxy
+    ports:
+      - "8080:8080"
+    depends_on:
+      - vllm-classifier
+
+  # ── Orchestration Service (LangGraph Spine) ──
+  orchestration:
+    build:
+      context: ../services/orchestration
+    ports:
+      - "8000:8000"
+    depends_on:
+      - safety-proxy
+
+  # ── Voice Gateway (WebRTC LiveKit SFU) ──
+  voice-gateway:
+    build:
+      context: ../services/voice-gateway
+    network_mode: host
+    depends_on:
+      - orchestration
+      - kokoro-tts
+
+  # ── Multi-Agent Career Panel Service ──
+  panel-service:
+    build:
+      context: ../services/panel-service
+    ports:
+      - "8006:8000"
+
+  # ── Governance Service ──
+  governance-service:
+    build:
+      context: ../services/governance-service
+    ports:
+      - "8007:8000"
+    depends_on:
+      - postgres-governance
+
+  # ── Guardian Dashboard BFF ──
+  dashboard-bff:
+    build:
+      context: ../services/dashboard-bff
+    ports:
+      - "8008:8000"
+
+  # ── Physically Separate Postgres Instances (Architecture Non-Negotiable) ──
+  postgres-primary:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: vadi_memory
+      POSTGRES_USER: vadi_app
+      POSTGRES_PASSWORD: secret
+
+  postgres-governance:
+    image: postgres:16-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: vadi_governance
+      POSTGRES_USER: vadi_gov_app
+      POSTGRES_PASSWORD: secret
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

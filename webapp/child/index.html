@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vadi | Your Sibling Companion</title>
+    <meta name="description" content="Vadi - Virtual Sibling Companion for Learners">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="child.css">
+</head>
+<body>
+    <div class="child-app">
+        <!-- Top Navigation -->
+        <header class="top-nav">
+            <div class="brand">
+                <div class="avatar-vadi">V</div>
+                <div>
+                    <h2>Vadi</h2>
+                    <span class="role-tag">Elder Sibling Mentor</span>
+                </div>
+            </div>
+
+            <div class="header-controls">
+                <div class="control">
+                    <label for="age-band">Age Band:</label>
+                    <select id="age-band" class="pill-select">
+                        <option value="1">8–10 Years</option>
+                        <option value="2" selected>11–13 Years</option>
+                        <option value="3">14–17 Years</option>
+                    </select>
+                </div>
+                <div class="control">
+                    <label for="lang-select">Language:</label>
+                    <select id="lang-select" class="pill-select">
+                        <option value="hi" selected>Hindi / Hinglish</option>
+                        <option value="pa">Punjabi (Piper Fallback)</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+                <div class="turn-chip" id="turn-chip">
+                    Turns: <span id="turn-count">1</span> / 20 Cap
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Chat Area -->
+        <main class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+                <div class="system-disclaimer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    <span>Vadi is an AI mentor companion designed to support learning. (PRD §4.1 AI Disclosure)</span>
+                </div>
+                <div class="bubble assistant">
+                    <div class="bubble-meta">
+                        <span class="name">Vadi</span>
+                        <span class="tag-safe">SAFE</span>
+                    </div>
+                    <div class="text">
+                        Namaste! Main Vadi hoon — tumhara elder sibling AI mentor. Aaj hum kya naya seekhenge?
+                    </div>
+                </div>
+            </div>
+
+            <!-- Voice Wave Indicator -->
+            <div class="voice-indicator hidden" id="voice-indicator">
+                <div class="wave"></div>
+                <div class="wave"></div>
+                <div class="wave"></div>
+                <span>Streaming Voice Turn (Silero VAD &rarr; Whisper STT &rarr; Kokoro TTS)...</span>
+            </div>
+
+            <!-- Input Bar -->
+            <form class="input-form" id="chat-form" onsubmit="sendChildTurn(event)">
+                <input type="text" id="chat-input" placeholder="Type to Vadi (e.g. 'I want to build drones' or ask about school)..." required autocomplete="off">
+                <button type="button" class="btn-mic" title="Voice Turn" onclick="startVoiceTurn()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                </button>
+                <button type="submit" class="btn-send">
+                    <span>Send</span>
+                </button>
+            </form>
+        </main>
+    </div>
+
+    <script src="child.js"></script>
+</body>
+</html>

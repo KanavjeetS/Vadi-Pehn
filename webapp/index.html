@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vadi-Pehn Platform | Portal Landing</title>
+    <meta name="description" content="Vadi-Pehn Virtual Sibling-Mentor Platform Landing Portal">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0b0f19;
+            --surface: #151b28;
+            --surface-elevated: #1e2638;
+            --primary: #6366f1;
+            --teal: #14b8a6;
+            --emerald: #10b981;
+            --amber: #f59e0b;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --font-heading: 'Outfit', sans-serif;
+            --font-body: 'Inter', sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: var(--font-body);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .portal-container {
+            width: 100%;
+            max-width: 1000px;
+            display: flex;
+            flex-direction: column;
+            gap: 2.5rem;
+        }
+
+        .header {
+            text-align: center;
+        }
+
+        .brand-logo {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, var(--teal), var(--primary));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-heading);
+            font-size: 2rem;
+            font-weight: 800;
+            margin: 0 auto 1rem auto;
+            box-shadow: 0 0 30px rgba(99, 102, 241, 0.4);
+        }
+
+        .header h1 {
+            font-family: var(--font-heading);
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .apps-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .app-card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .app-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary);
+        }
+
+        .card-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .app-card h2 {
+            font-family: var(--font-heading);
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .app-card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 1.5rem;
+        }
+
+        .feature-list {
+            list-style: none;
+            margin-bottom: 2rem;
+        }
+
+        .feature-list li {
+            font-size: 0.85rem;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .feature-list li::before {
+            content: "✓";
+            color: var(--emerald);
+            font-weight: bold;
+        }
+
+        .btn-launch {
+            display: inline-block;
+            text-align: center;
+            text-decoration: none;
+            padding: 0.9rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: background 0.2s ease;
+        }
+
+        .btn-child {
+            background: linear-gradient(135deg, var(--teal), #0d9488);
+            color: #fff;
+        }
+
+        .btn-child:hover { background: #0d9488; }
+
+        .btn-guardian {
+            background: linear-gradient(135deg, var(--primary), #4f46e5);
+            color: #fff;
+        }
+
+        .btn-guardian:hover { background: #4f46e5; }
+
+        .status-footer {
+            background-color: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        .status-item { display: flex; align-items: center; gap: 0.5rem; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--emerald); }
+    </style>
+</head>
+<body>
+    <div class="portal-container">
+        <div class="header">
+            <div class="brand-logo">V</div>
+            <h1>Vadi-Pehn Platform</h1>
+            <p>Virtual Sibling-Mentor Companion for Under-Resourced Youth (PRD v2.0)</p>
+        </div>
+
+        <div class="apps-grid">
+            <!-- Child Companion App Card -->
+            <div class="app-card">
+                <div>
+                    <div class="card-icon">👧🏻👦🏽</div>
+                    <h2>Child Companion Application</h2>
+                    <p>Age-appropriate, voice-first mentorship companion interface with Vadi (Elder Sibling persona).</p>
+                    <ul class="feature-list">
+                        <li>Siri-Grade Voice Streaming & Barge-in</li>
+                        <li>Multilingual Speech (Hindi, Punjabi, English)</li>
+                        <li>Career Mentors Handoff & Speaking Panel</li>
+                        <li>Daily 20-Turn Session Cap Enforcement</li>
+                    </ul>
+                </div>
+                <a href="/child/" class="btn-launch btn-child">Launch Child App →</a>
+            </div>
+
+            <!-- Guardian Governance Console Card -->
+            <div class="app-card">
+                <div>
+                    <div class="card-icon">🛡️</div>
+                    <h2>Guardian Governance Console</h2>
+                    <p>Verified guardian account surface for consent ledger management and 15-minute SLA safety triage.</p>
+                    <ul class="feature-list">
+                        <li>NGO Co-Signature & OTP Verification</li>
+                        <li>Minor Account Provisioning (No Self-Signup)</li>
+                        <li>Granular Revocable Consent Ledger</li>
+                        <li>15-Minute SLA Safety Incident Triage</li>
+                    </ul>
+                </div>
+                <a href="/guardian/" class="btn-launch btn-guardian">Launch Guardian Console →</a>
+            </div>
+        </div>
+
+        <div class="status-footer">
+            <div class="status-item">
+                <div class="status-dot"></div>
+                <span><strong>Server Status:</strong> Online (Port 8000)</span>
+            </div>
+            <div class="status-item">
+                <span><strong>Safety Proxy:</strong> Active (Fail-Closed 3s Timeout)</span>
+            </div>
+            <div class="status-item">
+                <span><strong>Security:</strong> Signed JWT Role Enforcement</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

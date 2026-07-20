@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.egg
+
+# Environment
+.env
+.env.local
+.env.*.local
+# Keep .env.example — it documents required vars
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Models (never commit model weights)
+*.bin
+*.safetensors
+*.gguf
+*.ggml
+/models/
+
+# Docker
+*.log
+
+# Node (dashboard-bff frontend)
+node_modules/
+.next/
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets — belt and suspenders (also covered by .env rule above)
+*secret*
+*credential*
+*private_key*
+
+# MinIO data (dev local)
+/minio-data/

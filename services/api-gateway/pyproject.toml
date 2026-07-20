@@ -1,0 +1,21 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "api-gateway"
+version = "0.1.0"
+description = "Unified API Gateway for Vadi-Pehn Virtual Sibling-Mentor Platform"
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.22.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.24.0",
+    "pyjwt>=2.8.0",
+]
+readme = "README.md"
+authors = [{ name = "Vadi-Pehn Team" }]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

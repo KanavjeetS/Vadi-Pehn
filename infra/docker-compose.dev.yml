@@ -1,0 +1,224 @@
+# Vadi-Pehn — Docker Compose Dev Environment
+# Implements: SD §6.1 (MVP topology, dev variant)
+# Does NOT include: GPU-accelerated vLLM (run separately with vllm-serve)
+#
+# Usage:
+#   docker compose -f infra/docker-compose.dev.yml up -d
+#   docker compose -f infra/docker-compose.dev.yml ps
+
+version: "3.9"
+
+networks:
+  vadi-internal:
+    driver: bridge
+  # Safety proxy sits on a separate network segment.
+  # Orchestration can only reach vllm-main THROUGH the safety proxy.
+  vadi-llm-backend:
+    driver: bridge
+    internal: true   # no external access
+
+volumes:
+  postgres_memory_data:
+  postgres_governance_data:
+  minio_data:
+  redis_data:
+  langfuse_data:
+
+services:
+
+  # ─────────────────────────────────────────────────────────
+  # Postgres — Memory Service DB
+  # PRD §3.2, SD §3.2 — learner_memories, learner_interest_profile
+  # SEPARATE from governance DB (SD architecture non-negotiable)
+  # ─────────────────────────────────────────────────────────
+  postgres-memory:
+    image: pgvector/pgvector:pg16
+    container_name: vadi-postgres-memory
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vadi_memory
+      POSTGRES_USER: vadi_app
+      POSTGRES_PASSWORD: ${MEMORY_DB_PASSWORD:-dev_memory_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_memory_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - vadi-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vadi_app -d vadi_memory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────
+  # Postgres — Governance DB (PHYSICALLY SEPARATE INSTANCE)
+  # PRD §3, SD §3.4 — consent_records, safety_incidents, audit_log
+  # Different port, different volume, different credentials
+  # ─────────────────────────────────────────────────────────
+  postgres-governance:
+    image: postgres:16-alpine
+    container_name: vadi-postgres-governance
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vadi_governance
+      POSTGRES_USER: vadi_gov_app
+      POSTGRES_PASSWORD: ${GOVERNANCE_DB_PASSWORD:-dev_governance_password}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_governance_data:/var/lib/postgresql/data
+    networks:
+      - vadi-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vadi_gov_app -d vadi_governance"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────
+  # MinIO — Document + Evidence Object Storage
+  # PRD §9 — report cards, scanned documents
+  # ─────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: vadi-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-dev_minio_access}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-dev_minio_secret_long_enough}
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console UI
+    volumes:
+      - minio_data:/data
+    networks:
+      - vadi-internal
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────
+  # Redis — Session Store + Job Queue
+  # Used by orchestration for LangGraph session checkpointing
+  # ─────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: vadi-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - vadi-internal
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────
+  # Langfuse — LLM Observability (PRD §12, SD §8)
+  # All LLM calls emit OpenTelemetry traces here.
+  # Required tags: hashed tenant_id, hashed learner_id, session_id,
+  #                safety_verdict_input, safety_verdict_output, persona_name
+  # ─────────────────────────────────────────────────────────
+  langfuse-server:
+    image: langfuse/langfuse:latest
+    container_name: vadi-langfuse
+    restart: unless-stopped
+    depends_on:
+      postgres-memory:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://vadi_app:${MEMORY_DB_PASSWORD:-dev_memory_password}@postgres-memory:5432/vadi_memory
+      NEXTAUTH_SECRET: ${LANGFUSE_SECRET_KEY:-dev_langfuse_secret_change_me}
+      NEXTAUTH_URL: http://localhost:3000
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+    ports:
+      - "3000:3000"
+    networks:
+      - vadi-internal
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/public/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ─────────────────────────────────────────────────────────
+  # Safety Proxy (stub in dev — real NeMo build in Phase 2)
+  # Returns SAFE for all requests in dev mode.
+  # GUARDRAILS G-001: orchestration has NO direct route to vllm-main.
+  # In prod this container is a full NeMo Guardrails reverse proxy.
+  # ─────────────────────────────────────────────────────────
+  safety-proxy:
+    build:
+      context: ./services/safety-proxy
+      dockerfile: Dockerfile
+      target: dev
+    container_name: vadi-safety-proxy
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: development
+      VLLM_MAIN_URL: http://vllm-main-stub:8001
+      VLLM_CLASSIFIER_URL: http://vllm-classifier-stub:8002
+    ports:
+      - "8080:8080"
+    networks:
+      - vadi-internal
+      - vadi-llm-backend
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────
+  # vLLM stubs for local dev (no GPU required)
+  # Replace with real vLLM containers when GPU is available.
+  # ─────────────────────────────────────────────────────────
+  vllm-main-stub:
+    image: python:3.12-slim
+    container_name: vadi-vllm-main-stub
+    command: >
+      python -c "
+      import json, http.server, threading
+      class H(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+          self.send_response(200)
+          self.send_header('Content-Type','application/json')
+          self.end_headers()
+          self.wfile.write(json.dumps({'choices':[{'message':{'content':'[DEV STUB] Hello, I am Vadi!'}}]}).encode())
+        def log_message(self, *args): pass
+      http.server.HTTPServer(('',8001),H).serve_forever()
+      "
+    ports:
+      - "8001:8001"
+    networks:
+      - vadi-llm-backend
+
+  vllm-classifier-stub:
+    image: python:3.12-slim
+    container_name: vadi-vllm-classifier-stub
+    command: >
+      python -c "
+      import json, http.server
+      class H(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+          self.send_response(200)
+          self.send_header('Content-Type','application/json')
+          self.end_headers()
+          self.wfile.write(json.dumps({'choices':[{'message':{'content':'safe'}}]}).encode())
+        def log_message(self, *args): pass
+      http.server.HTTPServer(('',8002),H).serve_forever()
+      "
+    ports:
+      - "8002:8002"
+    networks:
+      - vadi-llm-backend

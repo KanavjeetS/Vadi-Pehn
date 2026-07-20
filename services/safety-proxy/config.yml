@@ -1,0 +1,26 @@
+# NeMo Guardrails configuration for Vadi-Pehn Safety Proxy
+# Implements: PRD §8 (Safety Guardrails & Pre-Filter Infrastructure), SD §4.3
+# Child Safety Non-Negotiable: Fail-closed on timeouts/errors.
+
+models:
+  - type: main
+    engine: vllm
+    model: meta-llama/Llama-3.3-70B-Instruct
+    parameters:
+      endpoint: http://vllm-main:8001/v1
+      timeout: 30.0
+
+rails:
+  config:
+    # Disable fallback to LLM for rail generation to ensure strict deterministic/classifier control
+    enable_rails_exceptions: true
+    passthrough_on_exception: false # FAIL-CLOSED: exceptions never allow pass-through
+
+  input:
+    flows:
+      - check child input safety
+      - check jailbreak attempts
+
+  output:
+    flows:
+      - check child output safety
