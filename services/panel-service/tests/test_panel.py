@@ -225,6 +225,7 @@ async def test_e2e_crewai_panel_execution() -> None:
 @pytest.mark.asyncio
 async def test_panel_output_is_blocked_when_safety_blocks_generation() -> None:
     from services.abstractions import MockSafetyClient, SafetyVerdictCode
+    from panel_service.models import ProfessionalPersona
 
     runner = CrewAIPanelRunner(
         safety_client=MockSafetyClient(

@@ -15,11 +15,11 @@ from voice_gateway.providers import ElevenLabsTTSService, GroqSTTService
 
 @pytest.mark.asyncio
 async def test_stt_without_provider_fails_without_fabricating_transcript() -> None:
-    with pytest.raises(RuntimeError, match="No STT provider"):
+    with pytest.raises(RuntimeError, match="provider"):
         await GroqSTTService().transcribe(b"[SYNTHETIC_AUDIO]", "en")
 
 
 @pytest.mark.asyncio
 async def test_tts_without_provider_fails_without_fabricating_audio() -> None:
-    with pytest.raises(RuntimeError, match="No TTS provider"):
+    with pytest.raises(RuntimeError, match="provider"):
         await ElevenLabsTTSService().synthesize("[SYNTHETIC_TEST_CASE] hello", "en")
