@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # 1. Memory Database (Postgres + pgvector)
+  postgres-memory:
+    image: pgvector/pgvector:pg16
+    container_name: vadi-postgres-memory
+    environment:
+      POSTGRES_DB: vadi_memory
+      POSTGRES_USER: vadi_app
+      POSTGRES_PASSWORD: secret_memory_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - memory_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vadi_app -d vadi_memory"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Governance Database (Physically Isolated Postgres Instance per Architecture Non-Negotiable)
+  postgres-governance:
+    image: postgres:16-alpine
+    container_name: vadi-postgres-governance
+    environment:
+      POSTGRES_DB: vadi_governance
+      POSTGRES_USER: vadi_gov_app
+      POSTGRES_PASSWORD: secret_gov_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - gov_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vadi_gov_app -d vadi_governance"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. Redis Queue Broker
+  redis:
+    image: redis:7-alpine
+    container_name: vadi-redis
+    ports:
+      - "6379:6379"
+
+  # 4. Ollama Open-Source Local LLM Service
+  ollama:
+    image: ollama/ollama:latest
+    container_name: vadi-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+
+  # 5. Core API Service (Service A)
+  core-api:
+    build:
+      context: ..
+      dockerfile: apps/core-api/Dockerfile
+    container_name: vadi-core-api
+    ports:
+      - "8001:8001"
+    environment:
+      - ENVIRONMENT=production
+      - MEMORY_DB_HOST=postgres-memory
+      - GOVERNANCE_DB_HOST=postgres-governance
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - postgres-memory
+      - postgres-governance
+      - redis
+
+  # 6. Agent Orchestration Service (Service B)
+  agent-service:
+    build:
+      context: ..
+      dockerfile: apps/agent-service/Dockerfile
+    container_name: vadi-agent-service
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - MEMORY_DB_HOST=postgres-memory
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      - postgres-memory
+      - ollama
+
+volumes:
+  memory_db_data:
+  gov_db_data:
+  ollama_models:

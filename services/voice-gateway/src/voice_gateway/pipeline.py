@@ -42,23 +42,44 @@ logger = logging.getLogger(__name__)
 
 def split_into_sentence_chunks(text: str) -> list[str]:
     """
-    Split generated LLM text into sentence chunks for per-chunk output safety and streaming TTS.
+    Siri-Grade Clause & Sentence Boundary Splitter.
+    Splits text on sentence delimiters [.!?।] and clause boundaries [,;:] if clause length >= 6 words
+    to achieve sub-500ms first audio byte streaming latency.
     """
+    # 1. Primary sentence splitting
     sentences = re.split(r"(?<=[.!?।])\s+", text.strip())
-    return [s.strip() for s in sentences if s.strip()]
+    final_chunks: list[str] = []
+    
+    for s in sentences:
+        s_clean = s.strip()
+        if not s_clean:
+            continue
+        
+        # 2. Sub-clause splitting for long sentences (> 10 words)
+        words = s_clean.split()
+        if len(words) >= 10:
+            sub_clauses = re.split(r"(?<=[,;:])\s+", s_clean)
+            for clause in sub_clauses:
+                c_clean = clause.strip()
+                if c_clean:
+                    final_chunks.append(c_clean)
+        else:
+            final_chunks.append(s_clean)
+            
+    return final_chunks
 
 
 async def stream_sentence_chunks(
     source: AsyncGenerator[str, None],
 ) -> AsyncGenerator[str, None]:
-    """Turn provider text deltas into completed sentence chunks."""
+    """Turn provider text deltas into completed sentence/clause chunks for sub-500ms TTS onset."""
     pending = ""
     async for part in source:
         pending += part
         chunks = split_into_sentence_chunks(pending)
         if not chunks:
             continue
-        if re.search(r"[.!?।]$", pending.strip()):
+        if re.search(r"[.!?।,;:]$", pending.strip()):
             pending = ""
         else:
             pending = chunks.pop()

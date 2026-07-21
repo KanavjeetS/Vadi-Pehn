@@ -161,6 +161,25 @@ class LiveKitSettings(BaseSettings):
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
+class GroqSettings(BaseSettings):
+    """Ultra-low latency Groq Cloud Inference API — Sub-100ms LLM & STT."""
+
+    api_key: str = Field("", alias="GROQ_API_KEY")
+    stt_model: str = Field("whisper-large-v3", alias="GROQ_STT_MODEL")
+    llm_model: str = Field("llama-3.3-70b-versatile", alias="GROQ_LLM_MODEL")
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+
+class ElevenLabsSettings(BaseSettings):
+    """ElevenLabs Ultra-realistic low-latency streaming TTS API."""
+
+    api_key: str = Field("", alias="ELEVENLABS_API_KEY")
+    voice_id: str = Field("2EiwWnXFnvU5JabPnv8n", alias="ELEVENLABS_VOICE_ID")  # Indian female calm voice
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+
 class VoiceSettings(BaseSettings):
     """Voice Gateway Pipeline (VAD, STT, TTS, Fallbacks, Safety check-output)."""
 
@@ -217,6 +236,8 @@ class Settings(BaseSettings):
     auth: AuthSettings = AuthSettings()  # type: ignore[call-arg]
     escalation: EscalationSettings = EscalationSettings()  # type: ignore[call-arg]
     livekit: LiveKitSettings = LiveKitSettings()  # type: ignore[call-arg]
+    groq: GroqSettings = GroqSettings()  # type: ignore[call-arg]
+    elevenlabs: ElevenLabsSettings = ElevenLabsSettings()  # type: ignore[call-arg]
     voice: VoiceSettings = VoiceSettings()  # type: ignore[call-arg]
     panel: PanelSettings = PanelSettings()  # type: ignore[call-arg]
 

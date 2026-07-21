@@ -35,18 +35,20 @@ app = FastAPI(
     version="0.1.0",
 )
 
+from voice_gateway.providers import GroqSTTService, ElevenLabsTTSService, LiveKitTokenService
+
 # Development stays hermetic; pilot/production uses the configured network services.
 if settings.is_dev:
+    _base_stt = MockSTTService()
+    _base_tts = MockTTSService()
     _vad_service = MockVADService()
-    _stt_service = MockSTTService()
-    _tts_service = MockTTSService()
     _room_manager = MockRoomManager()
 else:
     _vad_service = SileroVADService(settings.voice.vad_model_path)
-    _stt_service = WhisperSTTService(
+    _base_stt = WhisperSTTService(
         settings.voice.whisper_url, settings.voice.whisper_model
     )
-    _tts_service = KokoroTTSService(
+    _base_tts = KokoroTTSService(
         settings.voice.kokoro_url,
         fallback_service=PiperTTSService(settings.voice.piper_path),
     )
@@ -55,6 +57,10 @@ else:
         settings.livekit.api_key,
         settings.livekit.api_secret,
     )
+
+# Wrap with ultra-low latency Groq and ElevenLabs providers (with automatic fallbacks)
+_stt_service = GroqSTTService(fallback_stt=_base_stt)
+_tts_service = ElevenLabsTTSService(fallback_tts=_base_tts)
 
 pipeline_instance = VoiceTurnPipeline(
     vad_service=_vad_service,

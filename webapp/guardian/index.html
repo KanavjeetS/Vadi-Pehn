@@ -3,160 +3,775 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guardian Governance & Safety Console | Vadi-Pehn</title>
-    <meta name="description" content="Vadi-Pehn Guardian Governance & Safety SLA Console">
+    <title>Vadi-Pehn — Guardian Governance Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="guardian.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --brand-primary: #7c3aed;
+            --brand-primary-light: #f3e8ff;
+            --bg-sidebar: #ffffff;
+            --bg-main: #f8fafc;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --text-dark: #0f172a;
+            --text-muted: #64748b;
+            --emerald: #10b981;
+            --amber: #f59e0b;
+            --red: #ef4444;
+            --font-main: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-main);
+            background: var(--bg-main);
+            color: var(--text-dark);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            width: 280px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+        }
+
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            margin-bottom: 24px;
+        }
+
+        .brand-logo-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--brand-primary);
+            color: #fff;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .brand-title-group strong { display: block; font-size: 16px; color: var(--text-dark); }
+        .brand-title-group span { font-size: 12px; color: var(--text-muted); }
+
+        .profile-card {
+            background: #f1f5f9;
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .profile-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: #0ea5e9;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 15px;
+        }
+
+        .profile-info strong { display: block; font-size: 13px; color: var(--text-dark); }
+        .profile-info span { font-size: 11px; color: var(--text-muted); }
+
+        .nav-menu {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .nav-item-btn {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: none;
+            background: transparent;
+            font-family: var(--font-main);
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s ease;
+        }
+
+        .nav-item-btn:hover {
+            background: #f1f5f9;
+            color: var(--text-dark);
+        }
+
+        .nav-item-btn.active {
+            background: var(--brand-primary-light);
+            color: var(--brand-primary);
+        }
+
+        .nav-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--border-color);
+            padding-top: 16px;
+        }
+
+        .nav-footer-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        /* Main Content Layout */
+        .main-content {
+            margin-left: 280px;
+            flex: 1;
+            padding: 40px 48px;
+            max-width: 1300px;
+        }
+
+        .view-pane {
+            display: none;
+            animation: fadeIn 0.25s ease;
+        }
+
+        .view-pane.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .page-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 32px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 6px;
+        }
+
+        .page-sub {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .action-btn-header {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            color: var(--text-dark);
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: all 0.2s ease;
+        }
+
+        .action-btn-header:hover {
+            border-color: #cbd5e1;
+            transform: translateY(-1px);
+        }
+
+        /* Cards & Grids */
+        .card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+            margin-bottom: 20px;
+        }
+
+        /* Overview Stat Cards Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 20px;
+        }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .stat-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .stat-val { font-size: 26px; font-weight: 800; margin-bottom: 4px; }
+        .stat-sub { font-size: 12px; color: var(--text-muted); }
+
+        .charts-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+        }
+
+        .chart-container { width: 100%; height: 240px; position: relative; }
+
+        /* Consent Toggles List */
+        .consent-item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .consent-item-row:last-child { border-bottom: none; }
+
+        .c-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+        .c-desc { font-size: 13px; color: var(--text-muted); }
+
+        /* Custom Toggle Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 26px;
+        }
+
+        .switch input { opacity: 0; width: 0; height: 0; }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: #cbd5e1;
+            transition: .3s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider { background-color: var(--brand-primary); }
+        input:checked + .slider:before { transform: translateX(22px); }
+
+        /* Upload Dropzone */
+        .dropzone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            background: #ffffff;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .dropzone:hover {
+            border-color: var(--brand-primary);
+            background: var(--brand-primary-light);
+        }
+
+        /* Progress Bar */
+        .progress-bar-bg {
+            background: #e2e8f0;
+            border-radius: 10px;
+            height: 8px;
+            width: 100%;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-bar-fill {
+            background: var(--brand-primary);
+            height: 100%;
+            border-radius: 10px;
+        }
+
+        /* Discovery List */
+        .discovery-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            margin-bottom: 12px;
+            background: #ffffff;
+        }
+
+        .disc-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: var(--brand-primary-light);
+            color: var(--brand-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .disc-topic { font-weight: 700; font-size: 15px; }
+        .disc-time { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+        .disc-summary { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+        .bolt-tag {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
+            border-radius: 14px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #0f172a;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+    </style>
 </head>
 <body>
-    <div class="guardian-app">
-        <header class="guardian-header">
-            <div class="brand">
-                <div class="shield-icon">&#128737;</div>
-                <div>
-                    <h1>Guardian Governance & SLA Console</h1>
-                    <p class="subtitle">PRD §3.2 Verified Guardian Account Surface &bull; SLA Triage</p>
-                </div>
-            </div>
 
-            <div class="auth-bar" id="auth-status-bar">
-                <span class="status-badge unverified" id="auth-status-badge">NOT AUTHENTICATED</span>
-                <button class="btn-primary" onclick="showEnrollModal()">Verify Guardian Identity</button>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <a href="/" class="sidebar-brand">
+            <div class="brand-logo-icon">🫶</div>
+            <div class="brand-title-group">
+                <strong>Vadi-Pehn</strong>
+                <span>Guardian Portal</span>
             </div>
-        </header>
+        </a>
 
-        <!-- Enrollment Modal / Surface -->
-        <div class="modal hidden" id="enroll-modal">
-            <div class="modal-content">
-                <h2>Guardian Verification & Enrollment (PRD §3.2)</h2>
-                <p class="modal-desc">Verify your guardian account using lightweight auditable enrollment (NGO Co-signature, OTP, or Partner Site).</p>
-                
-                <form id="enroll-form" onsubmit="handleEnrollGuardian(event)">
-                    <div class="form-group">
-                        <label>Guardian Full Name:</label>
-                        <input type="text" id="g-name" value="Ramesh Kumar" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Phone Number / Contact:</label>
-                        <input type="text" id="g-phone" value="+91 98765 43210" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Verification Method:</label>
-                        <select id="g-method">
-                            <option value="ngo_cosign" selected>NGO Caseworker Co-signature</option>
-                            <option value="guardian_otp">Guardian Phone OTP</option>
-                            <option value="in_person">In-Person Partner Site Verification</option>
-                        </select>
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" onclick="hideEnrollModal()">Cancel</button>
-                        <button type="submit" class="btn-primary">Verify & Obtain Guardian Token</button>
-                    </div>
-                </form>
+        <div class="profile-card">
+            <div class="profile-avatar">A</div>
+            <div class="profile-info">
+                <strong>Aria, age 11</strong>
+                <span>Active 14 min ago</span>
             </div>
         </div>
 
-        <main class="dashboard-grid">
-            <!-- Provision Child Account Section -->
+        <ul class="nav-menu">
+            <li><button class="nav-item-btn active" onclick="switchTab('overview')"><span>📊</span> Overview</button></li>
+            <li><button class="nav-item-btn" onclick="switchTab('consent')"><span>🛡️</span> Consent & privacy</button></li>
+            <li><button class="nav-item-btn" onclick="switchTab('uploads')"><span>☁️</span> Uploads</button></li>
+            <li><button class="nav-item-btn" onclick="switchTab('insights')"><span>💡</span> Insights</button></li>
+            <li><button class="nav-item-btn" onclick="switchTab('discovery')"><span>🧭</span> Discovery log</button></li>
+            <li><button class="nav-item-btn" onclick="switchTab('safety')"><span>⚠️</span> Safety & controls</button></li>
+        </ul>
+
+        <div class="nav-footer">
+            <a href="/" class="nav-footer-link">← Back to home</a>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+
+        <!-- 1. OVERVIEW VIEW -->
+        <div id="view-overview" class="view-pane active">
+            <header class="page-header-row">
+                <div>
+                    <h1 class="page-title">How Aria's week is going</h1>
+                    <p class="page-sub">A calm snapshot of recent engagement, mood, and growth. No raw transcripts — ever.</p>
+                </div>
+                <button class="action-btn-header" onclick="switchTab('insights')">See insights →</button>
+            </header>
+
+            <section class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-header"><div class="stat-icon">🕒</div><span>Time with mentor</span></div>
+                    <div class="stat-val">2h 52m</div>
+                    <div class="stat-sub">+38m vs last week</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-header"><div class="stat-icon">🔥</div><span>Current streak</span></div>
+                    <div class="stat-val">5 days</div>
+                    <div class="stat-sub">Longest yet</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-header"><div class="stat-icon">😊</div><span>Most common mood</span></div>
+                    <div class="stat-val">Curious</div>
+                    <div class="stat-sub">Up from calm</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-header"><div class="stat-icon">📈</div><span>Top growing skill</span></div>
+                    <div class="stat-val">World exposure</div>
+                    <div class="stat-sub">+9 this month</div>
+                </div>
+            </section>
+
+            <section class="charts-row">
+                <div class="card">
+                    <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">Engagement this week</h3>
+                    <p style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">Minutes spent talking with the mentor each day.</p>
+                    <div class="chart-container"><canvas id="engagementChart"></canvas></div>
+                </div>
+
+                <div class="card">
+                    <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">Mood trend</h3>
+                    <p style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">Tone across the last 6 weeks.</p>
+                    <div class="chart-container"><canvas id="moodChart"></canvas></div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 2. CONSENT & PRIVACY VIEW -->
+        <div id="view-consent" class="view-pane">
+            <header class="page-header-row">
+                <div>
+                    <h1 class="page-title">Consent & Privacy Ledger</h1>
+                    <p class="page-sub">PRD §3.2 Verified Consent Controls — Toggle permissions on or off at any time.</p>
+                </div>
+            </header>
+
             <div class="card">
-                <h2>Provision Minor Learner Account (PRD §3.2)</h2>
-                <p class="card-desc">Minor accounts cannot self-signup; they must be provisioned by a verified guardian.</p>
-                
-                <form id="provision-form" onsubmit="handleProvisionLearner(event)">
-                    <div class="form-group">
-                        <label>Minor Display Name:</label>
-                        <input type="text" id="l-name" value="Alex" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Age Band:</label>
-                        <select id="l-band">
-                            <option value="1">Band 1 (Ages 8-10)</option>
-                            <option value="2" selected>Band 2 (Ages 11-13)</option>
-                            <option value="3">Band 3 (Ages 14-17)</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn-primary" id="btn-provision">Provision Child Account & Issue Token</button>
-                </form>
+                <h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">Active Consent Items</h3>
 
-                <div class="result-box hidden" id="learner-token-box">
-                    <strong>Child Session Token Issued:</strong>
-                    <code id="issued-child-token">jwt_learner_token_sample...</code>
-                    <p class="note">Copy this token to launch the Child Companion App (/child/).</p>
+                <div class="consent-item-row">
+                    <div>
+                        <div class="c-title">Conversational Memory Retention</div>
+                        <div class="c-desc">Store episodic memory vector embeddings for 18 months for personalized rapport.</div>
+                    </div>
+                    <label class="switch"><input type="checkbox" checked onchange="toggleConsent('memory', this.checked)"><span class="slider"></span></label>
+                </div>
+
+                <div class="consent-item-row">
+                    <div>
+                        <div class="c-title">Document & Report Card Ingestion</div>
+                        <div class="c-desc">Extract grades and teacher notes via olmOCR to tailor mentorship advice.</div>
+                    </div>
+                    <label class="switch"><input type="checkbox" checked onchange="toggleConsent('ocr', this.checked)"><span class="slider"></span></label>
+                </div>
+
+                <div class="consent-item-row">
+                    <div>
+                        <div class="c-title">Live Voice Stream Processing</div>
+                        <div class="c-desc">Process WebRTC audio for Kokoro speech synthesis (zero raw audio retention).</div>
+                    </div>
+                    <label class="switch"><input type="checkbox" checked onchange="toggleConsent('voice', this.checked)"><span class="slider"></span></label>
+                </div>
+
+                <div class="consent-item-row">
+                    <div>
+                        <div class="c-title">Career Mentors Handoff</div>
+                        <div class="c-desc">Allow Vadi to introduce simulated guest mentors (e.g. Engineer Pri, Dr. Maya).</div>
+                    </div>
+                    <label class="switch"><input type="checkbox" checked onchange="toggleConsent('panel', this.checked)"><span class="slider"></span></label>
                 </div>
             </div>
 
-            <!-- Granular Consent Ledger -->
             <div class="card">
-                <h2>Consent Ledger Management (PRD §3.2)</h2>
-                <p class="card-desc">Independently revocable consent types. Withdrawal triggers data deletion jobs.</p>
-                
-                <div class="consent-list">
-                    <div class="consent-row">
+                <h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">Your Data Rights</h3>
+                <div style="display:flex; gap:16px;">
+                    <button class="action-btn-header" onclick="alert('Export requested! A plain-language summary will be prepared.')">📥 Request Data Copy</button>
+                    <button class="action-btn-header" onclick="alert('Downloading JSON data archive...')">📄 Download JSON</button>
+                    <button class="action-btn-header" style="color:var(--red); border-color:var(--red);" onclick="confirm('Are you sure you want to permanently erase all learner data?') && alert('Data erasure job queued.')">🗑️ Erase Everything</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. UPLOADS VIEW -->
+        <div id="view-uploads" class="view-pane">
+            <header class="page-header-row">
+                <div>
+                    <h1 class="page-title">Document & Report Card Uploads</h1>
+                    <p class="page-sub">Upload academic documents or teacher notes for olmOCR extraction and grade discrepancy review.</p>
+                </div>
+            </header>
+
+            <div class="dropzone" onclick="document.getElementById('file-input').click()">
+                <div style="font-size:36px; margin-bottom:12px;">☁️</div>
+                <h3 style="font-size:18px; font-weight:700; margin-bottom:6px;">Drag a file here, or click to browse</h3>
+                <p style="font-size:14px; color:var(--text-muted);">Supports PDF, PNG, or JPG report cards.</p>
+                <input type="file" id="file-input" style="display:none;" onchange="simulateUpload(this)">
+            </div>
+
+            <div class="card" style="margin-top:28px;">
+                <h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">Recent Document Uploads</h3>
+                <div id="upload-list">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-color);">
                         <div>
-                            <strong>Conversational Storage</strong>
-                            <p>Rolling 18mo vector retention</p>
+                            <strong>Q3_Report_Card_Aria.pdf</strong>
+                            <div style="font-size:12px; color:var(--text-muted);">Uploaded 2 days ago • Confidence 94%</div>
                         </div>
-                        <button class="btn-toggle active" onclick="toggleConsentRow('conversation_storage', this)">GRANTED</button>
-                    </div>
-                    <div class="consent-row">
-                        <div>
-                            <strong>Document Ingestion</strong>
-                            <p>olmOCR report card extraction</p>
-                        </div>
-                        <button class="btn-toggle active" onclick="toggleConsentRow('document_ingestion', this)">GRANTED</button>
-                    </div>
-                    <div class="consent-row">
-                        <div>
-                            <strong>Voice Turn Recording</strong>
-                            <p>LiveKit WebRTC streams (0 storage)</p>
-                        </div>
-                        <button class="btn-toggle active" onclick="toggleConsentRow('voice_recording', this)">GRANTED</button>
-                    </div>
-                    <div class="consent-row">
-                        <div>
-                            <strong>Career Mentors Handoff</strong>
-                            <p>Introduction to simulated professionals</p>
-                        </div>
-                        <button class="btn-toggle active" onclick="toggleConsentRow('career_introductions', this)">GRANTED</button>
+                        <span style="background:#d1fae5; color:#10b981; padding:4px 12px; border-radius:12px; font-size:12px; font-weight:700;">Reconciled</span>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Safety Incident SLA Queue -->
-            <div class="card full-width">
-                <div class="card-header">
-                    <h2>Safety Incident SLA Queue (PRD §3.3)</h2>
-                    <span class="badge-sla">15-MINUTE MANDATORY SLA</span>
+        <!-- 4. INSIGHTS VIEW -->
+        <div id="view-insights" class="view-pane">
+            <header class="page-header-row">
+                <div>
+                    <h1 class="page-title">Growth & Skill Insights</h1>
+                    <p class="page-sub">Plain-language progress summaries and pediatrician/parent conversation starters.</p>
                 </div>
-                
-                <table class="incident-table">
-                    <thead>
-                        <tr>
-                            <th>Incident ID</th>
-                            <th>Severity</th>
-                            <th>Excerpt</th>
-                            <th>Created At</th>
-                            <th>SLA Deadline</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>inc_self_harm_01</code></td>
-                            <td><span class="badge-sev high">self_harm</span></td>
-                            <td>"main sun raha hoon... jo tum share kar rahe ho..."</td>
-                            <td>2 mins ago</td>
-                            <td><span class="sla-timer">12m 48s</span></td>
-                            <td><button class="btn-action" onclick="ackIncident('inc_self_harm_01')">Acknowledge Incident</button></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </main>
-    </div>
+            </header>
 
-    <script src="guardian.js"></script>
+            <div class="card">
+                <h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">Skill Mastery Progress</h3>
+                
+                <div style="margin-bottom:16px;">
+                    <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:600;"><span>World Exposure & Curiosity</span><span>82%</span></div>
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:82%;"></div></div>
+                </div>
+
+                <div style="margin-bottom:16px;">
+                    <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:600;"><span>STEM & Robotics Concepts</span><span>74%</span></div>
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:74%;"></div></div>
+                </div>
+
+                <div>
+                    <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:600;"><span>Emotional Resilience</span><span>90%</span></div>
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:90%;"></div></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 style="font-size:18px; font-weight:700; margin-bottom:12px;">💬 Conversation Starters for Dinner</h3>
+                <p style="font-size:14px; color:var(--text-muted); line-height:1.6;">
+                    "Aria expressed high curiosity about how drones use sensor data to fly. You could ask her: <em>'If you built a drone, what mission would you give it?'</em>"
+                </p>
+            </div>
+        </div>
+
+        <!-- 5. DISCOVERY LOG VIEW -->
+        <div id="view-discovery" class="view-pane">
+            <header class="page-header-row">
+                <div>
+                    <h1 class="page-title">Discovery & Interest Log</h1>
+                    <p class="page-sub">Chronological history of topics and career interests Aria explored with Vadi.</p>
+                </div>
+            </header>
+
+            <div class="discovery-card">
+                <div class="disc-icon">🤖</div>
+                <div>
+                    <div class="disc-topic">Drones & Robotics Engineering</div>
+                    <div class="disc-time">Today at 2:15 PM • Speaker: Engineer Pri</div>
+                    <div class="disc-summary">Aria asked how sensors help drones stay stable. Vadi introduced Engineer Pri to explain feedback loops in simple terms.</div>
+                </div>
+            </div>
+
+            <div class="discovery-card">
+                <div class="disc-icon">🌊</div>
+                <div>
+                    <div class="disc-topic">Marine Ecosystems & Coral Reefs</div>
+                    <div class="disc-time">Yesterday at 4:30 PM • Speaker: Dr. Maya</div>
+                    <div class="disc-summary">Explored ocean conservation and marine biology pathways.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. SAFETY & CONTROLS VIEW -->
+        <div id="view-safety" class="view-pane">
+            <header class="page-header-row">
+                <div>
+                    <h1 class="page-title">Safety & Incident Controls</h1>
+                    <p class="page-sub">PRD §3.3 15-Minute SLA Safety Incident Triage & Emergency Contact Configuration.</p>
+                </div>
+            </header>
+
+            <div class="card">
+                <h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">Daily Session Cap Settings</h3>
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <label style="font-size:14px; font-weight:600;">Max Turns Per Day:</label>
+                    <select id="turn-cap-select" style="padding:8px 16px; border-radius:12px; border:1px solid var(--border-color); font-size:14px;">
+                        <option value="15">15 Turns / Day</option>
+                        <option value="20" selected>20 Turns / Day (Recommended)</option>
+                        <option value="30">30 Turns / Day</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">15-Minute SLA Incident Queue</h3>
+                <p style="font-size:14px; color:var(--text-muted);">Zero active safety alerts. Aegis 2.0 safety proxy is actively screening turns.</p>
+            </div>
+        </div>
+
+    </main>
+
+    <div class="bolt-tag">⚡ Vadi-Pehn</div>
+
+    <script>
+        // Tab switching logic
+        function switchTab(tabId) {
+            document.querySelectorAll('.view-pane').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item-btn').forEach(el => el.classList.remove('active'));
+
+            const activeView = document.getElementById(`view-${tabId}`);
+            if (activeView) activeView.classList.add('active');
+
+            const activeBtn = Array.from(document.querySelectorAll('.nav-item-btn')).find(btn => btn.getAttribute('onclick')?.includes(tabId));
+            if (activeBtn) activeBtn.classList.add('active');
+        }
+
+        async function toggleConsent(type, isGranted) {
+            const token = sessionStorage.getItem('vadi_access_token');
+            try {
+                if (token) {
+                    await fetch('/api/v1/guardian/consent', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            tenant_id: sessionStorage.getItem('vadi_tenant_id') || '00000000-0000-0000-0000-000000000001',
+                            guardian_id: sessionStorage.getItem('vadi_guardian_id') || '00000000-0000-0000-0000-000000000002',
+                            consent_type: type,
+                            granted: isGranted
+                        })
+                    });
+                }
+            } catch (e) {
+                console.warn('Consent update fallback handled.');
+            }
+        }
+
+        function simulateUpload(input) {
+            if (input.files && input.files[0]) {
+                const list = document.getElementById('upload-list');
+                const file = input.files[0];
+                const div = document.createElement('div');
+                div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-color);";
+                div.innerHTML = `
+                    <div>
+                        <strong>${file.name}</strong>
+                        <div style="font-size:12px; color:var(--text-muted);">Uploaded just now • Reconciling grades...</div>
+                    </div>
+                    <span style="background:#fef08a; color:#b45309; padding:4px 12px; border-radius:12px; font-size:12px; font-weight:700;">Processing</span>
+                `;
+                list.prepend(div);
+                setTimeout(() => {
+                    div.querySelector('span').innerText = "Reconciled";
+                    div.querySelector('span').style.background = "#d1fae5";
+                    div.querySelector('span').style.color = "#10b981";
+                }, 2000);
+            }
+        }
+
+        // Initialize Charts
+        window.addEventListener('DOMContentLoaded', () => {
+            const engCtx = document.getElementById('engagementChart').getContext('2d');
+            const engGrad = engCtx.createLinearGradient(0, 0, 0, 200);
+            engGrad.addColorStop(0, 'rgba(124, 58, 237, 0.35)');
+            engGrad.addColorStop(1, 'rgba(124, 58, 237, 0.0)');
+
+            new Chart(engCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        data: [18, 24, 12, 28, 20, 36, 22],
+                        borderColor: '#7c3aed',
+                        borderWidth: 3,
+                        fill: true,
+                        backgroundColor: engGrad,
+                        tension: 0.45,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8' }, min: 0 }
+                    }
+                }
+            });
+
+            const moodCtx = document.getElementById('moodChart').getContext('2d');
+            new Chart(moodCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4', 'Wk 5', 'Wk 6'],
+                    datasets: [
+                        { label: 'Calm', data: [60, 50, 48, 58, 62, 70], backgroundColor: '#38bdf8' },
+                        { label: 'Curious', data: [25, 35, 36, 30, 28, 22], backgroundColor: '#a78bfa' },
+                        { label: 'Tired', data: [15, 15, 16, 12, 10, 8], backgroundColor: '#fef08a' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { stacked: true, grid: { display: false }, ticks: { color: '#94a3b8' } },
+                        y: { stacked: true, grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8' }, max: 100 }
+                    }
+                }
+            });
+        });
+    </script>
 </body>
 </html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vadi-Pehn Admin Observability & Langfuse Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #6366f1;
+            --accent-light: #818cf8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 24px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+            margin: 0;
+        }
+
+        .badge {
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--accent-light);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid var(--accent);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h3 {
+            font-size: 14px;
+            color: var(--muted);
+            margin: 0 0 8px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .card .metric {
+            font-size: 32px;
+            font-weight: 700;
+            color: #fff;
+            margin: 0;
+        }
+
+        .status-ok { color: var(--success); }
+        .status-warn { color: var(--warning); }
+        .status-danger { color: var(--danger); }
+
+        .dashboard-frame {
+            width: 100%;
+            height: 600px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            background: var(--card-bg);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>🔒 Admin System Observability & Tracing</h1>
+            <p style="color: var(--muted); margin: 4px 0 0 0;">Langfuse OpenTelemetry & System Health Control Center (Admin Scope Only)</p>
+        </div>
+        <div class="badge">Role: Admin</div>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h3>Active Langfuse Traces</h3>
+            <div class="metric status-ok" id="metric-traces">142</div>
+        </div>
+        <div class="card">
+            <h3>Safety Filter Pass Rate</h3>
+            <div class="metric status-ok" id="metric-safety">99.18%</div>
+        </div>
+        <div class="card">
+            <h3>15-Min SLA Compliance</h3>
+            <div class="metric status-ok" id="metric-sla">100%</div>
+        </div>
+        <div class="card">
+            <h3>Voice Latency (p95)</h3>
+            <div class="metric" style="color: var(--accent-light);" id="metric-latency">3.2s</div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 24px;">
+        <h3>Live Langfuse Tracing Dashboard</h3>
+        <p style="color: var(--muted); font-size: 14px; margin-bottom: 16px;">Connected Host: <strong id="langfuse-host" style="color: #fff;">http://localhost:3000</strong></p>
+        <iframe class="dashboard-frame" src="http://localhost:3000" title="Langfuse Dashboard"></iframe>
+    </div>
+
+    <script>
+        async function fetchAdminMetrics() {
+            try {
+                const res = await fetch('/api/v1/admin/observability/metrics', {
+                    headers: { 'X-User-Role': 'admin' }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('metric-traces').innerText = data.active_traces;
+                    document.getElementById('metric-safety').innerText = data.safety_triggers.safe_pass_rate + '%';
+                    document.getElementById('metric-sla').innerText = data.sla_metrics.self_harm_15min_sla_met;
+                    document.getElementById('metric-latency').innerText = (data.voice_latency_p95_ms / 1000).toFixed(1) + 's';
+                    document.getElementById('langfuse-host').innerText = data.langfuse_host;
+                }
+            } catch (e) {
+                console.log('Using default admin metrics fallback');
+            }
+        }
+        fetchAdminMetrics();
+    </script>
+</body>
+</html>

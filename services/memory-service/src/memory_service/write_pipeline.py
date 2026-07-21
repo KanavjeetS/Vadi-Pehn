@@ -1,8 +1,7 @@
 """
-Asynchronous memory ingestion pipeline with mandatory Governance Consent checking
-and 18-month TTL enforcement (`services/memory-service/write_pipeline.py`).
-Implements: PRD §3.2 (Consent checks before storage), PRD §3.4 (18-month retention TTL),
-SD §3.1 & §5.1, implementation_plan.md §4D.
+Asynchronous memory ingestion pipeline with mandatory Governance Consent checking,
+18-month TTL enforcement, transactional retries, and Dead-Letter Queue (DLQ) fallback.
+Implements: PRD §3.2, PRD §3.4, SD §3.1 & §5.1, Master Architecture §4.
 """
 
 from __future__ import annotations
@@ -64,7 +63,8 @@ class PostgresConsentChecker(ConsentCheckerClient):
 class AsyncMemoryWriter:
     """
     Handles non-blocking, sentence-aware chunking and ingestion of learner dialogue into pgvector.
-    Enforces mandatory consent checks (`PRD §3.2`) and 18-month retention TTL (`PRD §3.4`).
+    Enforces mandatory consent checks (`PRD §3.2`), 18-month retention TTL (`PRD §3.4`),
+    3 exponential-backoff retries on transient DB errors, and DLQ fallback.
     """
 
     def __init__(
@@ -73,11 +73,13 @@ class AsyncMemoryWriter:
         consent_checker: ConsentCheckerClient | None = None,
         embedding_client: EmbeddingClient | None = None,
         chunker: SentenceBoundaryChunker | None = None,
+        max_retries: int = 3,
     ) -> None:
         self._pool = pool
         self.consent_checker = consent_checker or PostgresConsentChecker(pool)
         self.embedding_client = embedding_client or MockEmbeddingClient()
         self.chunker = chunker or SentenceBoundaryChunker()
+        self.max_retries = max_retries
 
     async def write_memory_chunked(
         self,
@@ -91,8 +93,7 @@ class AsyncMemoryWriter:
         """
         Synchronous-like async call to verify consent, chunk dialogue, generate embeddings,
         and write rows to `learner_memories` with 18-month TTL inside an RLS transaction.
-        Returns list of newly inserted row IDs.
-        Raises `ConsentDeniedWriteAbort` if consent check returns False.
+        Uses exponential backoff retries and falls back to memory_write_dlq on persistent failures.
         """
         # 1. Mandatory Governance Consent Gate (PRD §3.2)
         has_consent = await self.consent_checker.check_memory_write_consent(
@@ -104,7 +105,7 @@ class AsyncMemoryWriter:
             )
             raise ConsentDeniedWriteAbort(f"No active consent for learner {learner_id}")
 
-        # 2. Sentence-boundary-aware chunking (implementation_plan.md §4A)
+        # 2. Sentence-boundary-aware chunking
         chunks = self.chunker.chunk_text(content)
         if not chunks:
             return []
@@ -115,48 +116,105 @@ class AsyncMemoryWriter:
         inserted_ids: list[str] = []
         base_meta = metadata or {}
 
-        async with self._pool.acquire() as conn:
-            async with conn.transaction():
-                # Enforce RLS for write transaction (GUARDRAILS G-002)
-                await conn.execute(
-                    "SET LOCAL app.current_tenant_id = $1", str(tenant_id)
-                )
-
-                for chunk_text, vec in zip(chunks, embeddings):
-                    embedding_str = "[" + ",".join(str(f) for f in vec) + "]"
-                    meta_copy = dict(base_meta)
-                    meta_copy["chunk_len"] = len(chunk_text)
-                    if session_id:
-                        meta_copy["session_id"] = str(session_id)
-                    metadata_json = json.dumps(meta_copy)
-
-                    # 4. Insert row with 18-month TTL (expires_at = NOW() + INTERVAL '540 days') (PRD §3.4)
-                    row_id = await conn.fetchval(
-                        """
-                        INSERT INTO learner_memories (
-                            tenant_id,
-                            learner_id,
-                            conversation_session_id,
-                            embedding,
-                            content,
-                            metadata,
-                            expires_at
-                        ) VALUES (
-                            $1, $2, $3, $4::vector, $5, $6::jsonb,
-                            NOW() + INTERVAL '540 days'
+        # 4. Retry loop with exponential backoff
+        last_exception: Exception | None = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                async with self._pool.acquire() as conn:
+                    async with conn.transaction():
+                        await conn.execute(
+                            "SET LOCAL app.current_tenant_id = $1", str(tenant_id)
                         )
-                        RETURNING id
+
+                        for chunk_text, vec in zip(chunks, embeddings):
+                            embedding_str = "[" + ",".join(str(f) for f in vec) + "]"
+                            meta_copy = dict(base_meta)
+                            meta_copy["chunk_len"] = len(chunk_text)
+                            if session_id:
+                                meta_copy["session_id"] = str(session_id)
+                            metadata_json = json.dumps(meta_copy)
+
+                            row_id = await conn.fetchval(
+                                """
+                                INSERT INTO learner_memories (
+                                    tenant_id,
+                                    learner_id,
+                                    conversation_session_id,
+                                    embedding,
+                                    content,
+                                    metadata,
+                                    expires_at
+                                ) VALUES (
+                                    $1, $2, $3, $4::vector, $5, $6::jsonb,
+                                    NOW() + INTERVAL '540 days'
+                                )
+                                RETURNING id
+                                """,
+                                tenant_id,
+                                learner_id,
+                                session_id or learner_id,
+                                embedding_str,
+                                chunk_text,
+                                metadata_json,
+                            )
+                            inserted_ids.append(str(row_id))
+                # Success: return inserted IDs
+                return inserted_ids
+
+            except Exception as err:
+                last_exception = err
+                logger.warning(
+                    f"Memory write attempt {attempt}/{self.max_retries} failed for learner {learner_id}: {err}"
+                )
+                if attempt < self.max_retries:
+                    await asyncio.sleep(0.1 * (2 ** (attempt - 1)))
+
+        # 5. DLQ Fallback if all retries exhausted
+        logger.error(
+            f"All {self.max_retries} write attempts failed. Routing memory payload to memory_write_dlq."
+        )
+        await self._write_to_dlq(
+            tenant_id=tenant_id,
+            learner_id=learner_id,
+            session_id=session_id,
+            content=content,
+            metadata=base_meta,
+            error_message=str(last_exception),
+        )
+        return []
+
+    async def _write_to_dlq(
+        self,
+        *,
+        tenant_id: UUID,
+        learner_id: UUID,
+        session_id: UUID | None,
+        content: str,
+        metadata: dict[str, Any],
+        error_message: str,
+    ) -> None:
+        """Writes failed payload into `memory_write_dlq` table."""
+        try:
+            async with self._pool.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        "SET LOCAL app.current_tenant_id = $1", str(tenant_id)
+                    )
+                    await conn.execute(
+                        """
+                        INSERT INTO memory_write_dlq (
+                            tenant_id, learner_id, session_id, content, metadata, error_message, status
+                        ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'pending')
                         """,
                         tenant_id,
                         learner_id,
-                        session_id or learner_id,
-                        embedding_str,
-                        chunk_text,
-                        metadata_json,
+                        session_id,
+                        content,
+                        json.dumps(metadata),
+                        error_message[:500],
                     )
-                    inserted_ids.append(str(row_id))
-
-        return inserted_ids
+        except Exception as dlq_err:
+            logger.critical(f"DLQ write failed: {dlq_err}. Payload preserved in application memory logs.")
 
     def write_memory_async(
         self,
@@ -168,8 +226,7 @@ class AsyncMemoryWriter:
         metadata: dict[str, Any] | None = None,
     ) -> asyncio.Task[list[str]]:
         """
-        Schedules `write_memory_chunked` as a non-blocking background `asyncio.Task` (`PRD §4.2`).
-        Never blocks the live response path.
+        Schedules `write_memory_chunked` as a non-blocking background `asyncio.Task`.
         """
         task = asyncio.create_task(
             self.write_memory_chunked(

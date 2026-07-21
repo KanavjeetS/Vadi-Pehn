@@ -46,10 +46,12 @@ for route in api_gateway_app.routes:
 # Mount static webapp paths
 child_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "webapp", "child"))
 guardian_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "webapp", "guardian"))
+admin_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "webapp", "admin"))
 webapp_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "webapp"))
 
 desktop_app.mount("/child", StaticFiles(directory=child_dir, html=True), name="child_app")
 desktop_app.mount("/guardian", StaticFiles(directory=guardian_dir, html=True), name="guardian_app")
+desktop_app.mount("/admin", StaticFiles(directory=admin_dir, html=True), name="admin_app")
 desktop_app.mount("/", StaticFiles(directory=webapp_root, html=True), name="static_root")
 
 
@@ -58,8 +60,9 @@ def main() -> None:
     url = f"http://127.0.0.1:{port}"
     print("===============================================================")
     print("  Vadi-Pehn Virtual Sibling-Mentor Platform — Desktop Server")
-    print(f"  Child Companion App : {url}/child/")
-    print(f"  Guardian Governance : {url}/guardian/")
+    print(f"  Child Companion App  : {url}/child/")
+    print(f"  Guardian Governance  : {url}/guardian/")
+    print(f"  Admin Observability  : {url}/admin/")
     print("===============================================================")
     
     # Auto-open Child app in default browser

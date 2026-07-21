@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vadi-agent-service
+  labels:
+    app: vadi-agent-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vadi-agent-service
+  template:
+    metadata:
+      labels:
+        app: vadi-agent-service
+    spec:
+      containers:
+      - name: agent-service
+        image: vadi-pehn/agent-service:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: OLLAMA_URL
+          value: "http://ollama-service:11434"
+        resources:
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vadi-agent-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+  selector:
+    app: vadi-agent-service

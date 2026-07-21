@@ -47,11 +47,12 @@ class HybridRetrievalEngine:
 
         async with self._pool.acquire() as conn:
             async with conn.transaction():
-                # 1. Enforce RLS and relaxed scan order per SD §7.1
+                # 1. Enforce RLS and relaxed scan order per SD §7.1 & PRD §7.1
                 await conn.execute(
                     "SET LOCAL app.current_tenant_id = $1", str(query.tenant_id)
                 )
                 await conn.execute("SET LOCAL hnsw.iterative_scan = relaxed_order")
+                await conn.execute("SET LOCAL hnsw.max_scan_tuples = 20000")
 
                 # 2. Dense HNSW Retrieval (Top N candidates)
                 dense_rows = await conn.fetch(
