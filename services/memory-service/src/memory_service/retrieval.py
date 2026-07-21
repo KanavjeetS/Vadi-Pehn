@@ -4,12 +4,10 @@ Reciprocal Rank Fusion (RRF), and cross-encoder reranking (`services/memory-serv
 Implements: PRD §4, SD §3.2, and implementation_plan.md §4B.
 Enforces RLS (`SET LOCAL app.current_tenant_id = $1`) on every retrieval query.
 """
+
 from __future__ import annotations
 
 import json
-from datetime import datetime
-from typing import Any
-from uuid import UUID
 
 import asyncpg
 
@@ -41,14 +39,18 @@ class HybridRetrievalEngine:
         self.embedding_client = embedding_client or MockEmbeddingClient()
         self.reranker_client = reranker_client or MockRerankerClient()
 
-    async def retrieve_hybrid(self, query: HybridRetrievalQuery) -> list[ScoredMemoryItem]:
+    async def retrieve_hybrid(
+        self, query: HybridRetrievalQuery
+    ) -> list[ScoredMemoryItem]:
         """Execute dense + sparse retrieval, RRF fusion, and cross-encoder reranking inside an RLS transaction."""
         embedding_str = "[" + ",".join(str(f) for f in query.query_embedding) + "]"
 
         async with self._pool.acquire() as conn:
             async with conn.transaction():
                 # 1. Enforce RLS and relaxed scan order per SD §7.1
-                await conn.execute("SET LOCAL app.current_tenant_id = $1", str(query.tenant_id))
+                await conn.execute(
+                    "SET LOCAL app.current_tenant_id = $1", str(query.tenant_id)
+                )
                 await conn.execute("SET LOCAL hnsw.iterative_scan = relaxed_order")
 
                 # 2. Dense HNSW Retrieval (Top N candidates)
@@ -91,7 +93,11 @@ class HybridRetrievalEngine:
 
         for rank, row in enumerate(dense_rows, start=1):
             row_id = str(row["id"])
-            meta = json.loads(row["metadata"]) if isinstance(row["metadata"], str) else (row["metadata"] or {})
+            meta = (
+                json.loads(row["metadata"])
+                if isinstance(row["metadata"], str)
+                else (row["metadata"] or {})
+            )
             candidates[row_id] = ScoredMemoryItem(
                 memory_id=row_id,
                 tenant_id=row["tenant_id"],
@@ -109,7 +115,11 @@ class HybridRetrievalEngine:
                 candidates[row_id].sparse_score = float(row["sparse_score"])
                 candidates[row_id].sparse_rank = rank
             else:
-                meta = json.loads(row["metadata"]) if isinstance(row["metadata"], str) else (row["metadata"] or {})
+                meta = (
+                    json.loads(row["metadata"])
+                    if isinstance(row["metadata"], str)
+                    else (row["metadata"] or {})
+                )
                 candidates[row_id] = ScoredMemoryItem(
                     memory_id=row_id,
                     tenant_id=row["tenant_id"],
@@ -131,8 +141,10 @@ class HybridRetrievalEngine:
 
         # Sort descending by RRF score and retain top candidate_limit before reranking
         candidate_list.sort(key=lambda x: x.rrf_score, reverse=True)
-        top_rrf = candidate_list[:query.candidate_limit]
+        top_rrf = candidate_list[: query.candidate_limit]
 
         # 6. Cross-Encoder Reranking
-        reranked = await self.reranker_client.rerank(query.query_text, top_rrf, top_k=query.top_k)
+        reranked = await self.reranker_client.rerank(
+            query.query_text, top_rrf, top_k=query.top_k
+        )
         return reranked

@@ -9,14 +9,16 @@ Invariants:
   2. Records with ocr_confidence < 0.85 default to discrepancy queue.
   3. Governance Service consent ('document_ingestion') MUST be verified before memory persistence.
 """
+
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+import json
+from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
 
+import httpx
 from pydantic import BaseModel, Field
 
 
@@ -52,18 +54,80 @@ class DiscrepancyRecord(BaseModel):
 
 
 class GovernanceConsentChecker(Protocol):
-    async def check_consent(self, tenant_id: UUID, learner_id: UUID, consent_type: str) -> bool:
-        ...
+    async def check_consent(
+        self, tenant_id: UUID, learner_id: UUID, consent_type: str
+    ) -> bool: ...
+
+
+class OCRExtractor(Protocol):
+    async def extract(self, masked_base64: str) -> tuple[dict[str, Any], float]: ...
 
 
 class MockGovernanceConsentChecker:
     def __init__(self, allowed_learners: set[UUID] | None = None) -> None:
         self.allowed_learners = allowed_learners
 
-    async def check_consent(self, tenant_id: UUID, learner_id: UUID, consent_type: str) -> bool:
+    async def check_consent(
+        self, tenant_id: UUID, learner_id: UUID, consent_type: str
+    ) -> bool:
         if self.allowed_learners is not None:
             return learner_id in self.allowed_learners
         return True
+
+
+class MockOCRExtractor:
+    """Deterministic extractor used only by development/tests."""
+
+    async def extract(self, masked_base64: str) -> tuple[dict[str, Any], float]:
+        if "low_conf" in masked_base64:
+            return {
+                "student_name": "Learner Synthetic",
+                "overall_grade": "B",
+                "subjects": {"Math": "80", "Science": "75"},
+            }, 0.72
+        return {
+            "student_name": "Learner Synthetic",
+            "overall_grade": "A",
+            "subjects": {"Math": "95", "Science": "92", "English": "88"},
+        }, 0.94
+
+
+class HttpOCRExtractor:
+    def __init__(self, url: str, model: str) -> None:
+        self.url = url.rstrip("/")
+        self.model = model
+
+    async def extract(self, masked_base64: str) -> tuple[dict[str, Any], float]:
+        prompt = (
+            "Extract this academic record as JSON with student_name, overall_grade, "
+            "subjects, and confidence fields. Do not infer missing values."
+        )
+        payload = {
+            "model": self.model,
+            "temperature": 0,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{masked_base64}"
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{self.url}/v1/chat/completions", json=payload
+            )
+            response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        extracted = json.loads(content) if isinstance(content, str) else content
+        return extracted, float(extracted.get("confidence", 0.0))
 
 
 class DocumentIngestionService:
@@ -75,8 +139,13 @@ class DocumentIngestionService:
     4. Governance Consent Gate check before writing to Memory Service
     """
 
-    def __init__(self, consent_checker: GovernanceConsentChecker | None = None) -> None:
+    def __init__(
+        self,
+        consent_checker: GovernanceConsentChecker | None = None,
+        ocr_extractor: OCRExtractor | None = None,
+    ) -> None:
         self.consent_checker = consent_checker or MockGovernanceConsentChecker()
+        self.ocr_extractor = ocr_extractor or MockOCRExtractor()
         self._document_db: dict[UUID, dict[str, Any]] = {}
         self._discrepancy_db: list[DiscrepancyRecord] = []
         self._discrepancy_id_counter = 1
@@ -98,25 +167,15 @@ class DocumentIngestionService:
         # Assert spatial mask verification tag present
         return masked_base64.endswith("_masked")
 
-    async def run_olm_ocr_extraction(self, masked_base64: str) -> tuple[dict[str, Any], float]:
-        """
-        Simulates olmOCR (Qwen2-VL-7B VLM) structured extraction.
-        Returns (extracted_dict, confidence_score).
-        """
-        # High confidence extraction sample
-        if "low_conf" in masked_base64:
-            return {
-                "student_name": "Learner Synthetic",
-                "overall_grade": "B",
-                "subjects": {"Math": "80", "Science": "75"},
-            }, 0.72
-        return {
-            "student_name": "Learner Synthetic",
-            "overall_grade": "A",
-            "subjects": {"Math": "95", "Science": "92", "English": "88"},
-        }, 0.94
+    async def run_olm_ocr_extraction(
+        self, masked_base64: str
+    ) -> tuple[dict[str, Any], float]:
+        """Run the configured OCR extractor after PII masking."""
+        return await self.ocr_extractor.extract(masked_base64)
 
-    async def process_document_upload(self, request: DocumentUploadRequest) -> ExtractedAcademicRecord:
+    async def process_document_upload(
+        self, request: DocumentUploadRequest
+    ) -> ExtractedAcademicRecord:
         """
         Processes document upload through the full ingestion pipeline.
         """
@@ -127,7 +186,9 @@ class DocumentIngestionService:
             consent_type="document_ingestion",
         )
         if not has_consent:
-            raise PermissionError(f"Guardian consent 'document_ingestion' not granted for learner {request.learner_id}")
+            raise PermissionError(
+                f"Guardian consent 'document_ingestion' not granted for learner {request.learner_id}"
+            )
 
         doc_id = uuid.uuid4()
 
@@ -137,7 +198,9 @@ class DocumentIngestionService:
         # Step 3: Secondary Automated Mask Verification (PRD §9.2)
         is_verified = self.verify_secondary_spatial_mask(masked_data)
         if not is_verified:
-            raise ValueError("Secondary spatial PII redaction verification failed — image contains unmasked third-party PII!")
+            raise ValueError(
+                "Secondary spatial PII redaction verification failed — image contains unmasked third-party PII!"
+            )
 
         # Step 4: olmOCR Extraction
         ocr_data, confidence = await self.run_olm_ocr_extraction(masked_data)
@@ -148,9 +211,14 @@ class DocumentIngestionService:
 
         if confidence < 0.85:
             requires_discrepancy = True
-            reasons.append(f"OCR confidence ({confidence:.2f}) below minimum threshold of 0.85")
+            reasons.append(
+                f"OCR confidence ({confidence:.2f}) below minimum threshold of 0.85"
+            )
 
-        if request.in_app_expected_grade and request.in_app_expected_grade != ocr_data.get("overall_grade"):
+        if (
+            request.in_app_expected_grade
+            and request.in_app_expected_grade != ocr_data.get("overall_grade")
+        ):
             requires_discrepancy = True
             reasons.append(
                 f"Grade mismatch: Extracted '{ocr_data.get('overall_grade')}' vs Expected '{request.in_app_expected_grade}'"

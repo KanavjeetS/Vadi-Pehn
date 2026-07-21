@@ -3,11 +3,11 @@ Abstract base classes for Voice Gateway components.
 Implements: coding-standards §3 (abstract-first pattern).
 PRD §6 (Voice-First Experience), SD §4.2 (Voice Gateway).
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Any, AsyncGenerator
-from uuid import UUID
 
 
 class VADService(ABC):
@@ -24,7 +24,9 @@ class VADService(ABC):
         ...
 
     @abstractmethod
-    async def detect_speech_end(self, audio_stream: AsyncGenerator[bytes, None]) -> bool:
+    async def detect_speech_end(
+        self, audio_stream: AsyncGenerator[bytes, None]
+    ) -> bool:
         """
         Processes an incoming audio stream and returns True when end-of-turn is detected.
         Must respect latency budget (Silero VAD turn detection ≤ 200ms).

@@ -8,10 +8,11 @@ Every query or write against learner_memories MUST run inside a transaction wher
 `SET LOCAL app.current_tenant_id = $1` has been executed. Never trust application-level
 WHERE clauses alone.
 """
+
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any
 from uuid import UUID
 
@@ -19,6 +20,7 @@ import asyncpg
 
 import sys
 import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 
 from services.abstractions import MemoryChunk, MemoryStore
@@ -48,12 +50,16 @@ class PostgresMemoryStore(MemoryStore):
         """
         embedding_str = "[" + ",".join(str(f) for f in embedding) + "]"
         metadata_json = json.dumps(metadata or {})
-        session_id = (metadata or {}).get("session_id", str(learner_id))  # fallback if session_id not in metadata
+        session_id = (metadata or {}).get(
+            "session_id", str(learner_id)
+        )  # fallback if session_id not in metadata
 
         async with self._pool.acquire() as conn:
             async with conn.transaction():
                 # 1. Enforce RLS for this transaction (GUARDRAILS G-002)
-                await conn.execute("SET LOCAL app.current_tenant_id = $1", str(tenant_id))
+                await conn.execute(
+                    "SET LOCAL app.current_tenant_id = $1", str(tenant_id)
+                )
 
                 # 2. Insert memory row
                 row_id = await conn.fetchval(
@@ -70,7 +76,11 @@ class PostgresMemoryStore(MemoryStore):
                     """,
                     tenant_id,
                     learner_id,
-                    UUID(session_id) if isinstance(session_id, str) and len(session_id) == 36 else learner_id,
+                    (
+                        UUID(session_id)
+                        if isinstance(session_id, str) and len(session_id) == 36
+                        else learner_id
+                    ),
                     embedding_str,
                     content,
                     metadata_json,
@@ -94,7 +104,9 @@ class PostgresMemoryStore(MemoryStore):
         async with self._pool.acquire() as conn:
             async with conn.transaction():
                 # 1. Enforce RLS and vector search parameters inside transaction (SD §7.1)
-                await conn.execute("SET LOCAL app.current_tenant_id = $1", str(tenant_id))
+                await conn.execute(
+                    "SET LOCAL app.current_tenant_id = $1", str(tenant_id)
+                )
                 await conn.execute("SET LOCAL hnsw.iterative_scan = relaxed_order")
                 await conn.execute("SET LOCAL hnsw.max_scan_tuples = 20000")
 
@@ -133,7 +145,11 @@ class PostgresMemoryStore(MemoryStore):
                             embedding=vec,
                             tenant_id=row["tenant_id"],
                             learner_id=row["learner_id"],
-                            created_at=row["created_at"] if row["created_at"].tzinfo else row["created_at"].replace(tzinfo=timezone.utc),
+                            created_at=(
+                                row["created_at"]
+                                if row["created_at"].tzinfo
+                                else row["created_at"].replace(tzinfo=timezone.utc)
+                            ),
                             similarity_score=float(row["similarity_score"]),
                         )
                     )
@@ -147,7 +163,9 @@ class PostgresMemoryStore(MemoryStore):
         """
         async with self._pool.acquire() as conn:
             async with conn.transaction():
-                await conn.execute("SET LOCAL app.current_tenant_id = $1", str(tenant_id))
+                await conn.execute(
+                    "SET LOCAL app.current_tenant_id = $1", str(tenant_id)
+                )
                 status = await conn.execute(
                     """
                     DELETE FROM learner_memories
@@ -179,13 +197,13 @@ class PostgresMemoryStore(MemoryStore):
                 tid = record["id"]
                 async with conn.transaction():
                     await conn.execute("SET LOCAL app.current_tenant_id = $1", str(tid))
-                    status = await conn.execute(
-                        """
+                    status = await conn.execute("""
                         DELETE FROM learner_memories
                         WHERE expires_at <= NOW()
-                        """
-                    )
+                        """)
                     parts = status.split()
-                    count = int(parts[-1]) if len(parts) > 1 and parts[-1].isdigit() else 0
+                    count = (
+                        int(parts[-1]) if len(parts) > 1 and parts[-1].isdigit() else 0
+                    )
                     total_deleted += count
             return total_deleted

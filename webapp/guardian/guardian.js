@@ -29,20 +29,21 @@ async function handleEnrollGuardian(event) {
         if (res.ok) {
             const data = await res.json();
             guardianToken = data.access_token;
+            sessionStorage.setItem('vadi_access_token', guardianToken);
+            sessionStorage.setItem('vadi_tenant_id', data.tenant_id);
+            sessionStorage.setItem('vadi_guardian_id', data.guardian_id);
             setAuthVerified(data.guardian_id);
             hideEnrollModal();
         } else {
-            simulateLocalEnroll();
+            throw new Error(`Enrollment failed (${res.status})`);
         }
     } catch (e) {
-        simulateLocalEnroll();
+        console.error(e);
     }
 }
 
 function simulateLocalEnroll() {
-    guardianToken = "mock_guardian_jwt_token_123";
-    setAuthVerified("00000000-0000-0000-0000-000000000003");
-    hideEnrollModal();
+    throw new Error('Local enrollment simulation has been removed; live API required.');
 }
 
 function setAuthVerified(id) {
@@ -61,7 +62,7 @@ async function handleProvisionLearner(event) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${guardianToken || 'mock_guardian_jwt_token_123'}`
+                'Authorization': `Bearer ${guardianToken || sessionStorage.getItem('vadi_access_token')}`
             },
             body: JSON.stringify({
                 display_name: name,
@@ -71,12 +72,14 @@ async function handleProvisionLearner(event) {
 
         if (res.ok) {
             const data = await res.json();
+            sessionStorage.setItem('vadi_learner_id', data.learner_id);
+            sessionStorage.setItem('vadi_learner_token', data.access_token);
             displayChildToken(data.access_token);
         } else {
-            displayChildToken("jwt_sample_learner_token_role_learner");
+            throw new Error(`Learner provisioning failed (${res.status})`);
         }
     } catch (e) {
-        displayChildToken("jwt_sample_learner_token_role_learner");
+        console.error(e);
     }
 }
 
@@ -104,12 +107,12 @@ async function toggleConsentRow(type, btn) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${guardianToken || 'mock_guardian_jwt_token_123'}`
+                'Authorization': `Bearer ${guardianToken || sessionStorage.getItem('vadi_access_token')}`
             },
             body: JSON.stringify({
-                tenant_id: '00000000-0000-0000-0000-000000000001',
-                learner_id: '00000000-0000-0000-0000-000000000002',
-                guardian_id: '00000000-0000-0000-0000-000000000003',
+                tenant_id: sessionStorage.getItem('vadi_tenant_id'),
+                learner_id: sessionStorage.getItem('vadi_learner_id'),
+                guardian_id: sessionStorage.getItem('vadi_guardian_id'),
                 consent_type: type,
                 granted: newStatus
             })

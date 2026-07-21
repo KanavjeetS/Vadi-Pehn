@@ -5,9 +5,12 @@ Implements: SD §9 (config centralization), coding-standards (no os.environ outs
 WHAT THIS DOES: Centralized Settings dataclass loaded from environment variables.
 WHAT THIS DOES NOT DO: Read os.environ directly anywhere else in the codebase.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
+import hmac
+from fastapi import HTTPException, status
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
@@ -20,6 +23,8 @@ class MemoryDBSettings(BaseSettings):
     name: str = Field("vadi_memory", alias="MEMORY_DB_NAME")
     user: str = Field("vadi_app", alias="MEMORY_DB_USER")
     password: str = Field("secret", alias="MEMORY_DB_PASSWORD")
+    embedding_url: str = Field("http://ollama:11434", alias="MEMORY_EMBEDDING_URL")
+    embedding_model: str = Field("nomic-embed-text", alias="MEMORY_EMBEDDING_MODEL")
 
     @property
     def dsn(self) -> str:
@@ -52,13 +57,21 @@ class VLLMSettings(BaseSettings):
     """vLLM service URLs — accessed ONLY through safety proxy (GUARDRAILS G-001)."""
 
     main_url: str = Field("http://localhost:8001", alias="VLLM_MAIN_URL")
-    main_model: str = Field("meta-llama/Llama-3.3-70B-Instruct", alias="VLLM_MAIN_MODEL")
+    main_model: str = Field(
+        "meta-llama/Llama-3.3-70B-Instruct", alias="VLLM_MAIN_MODEL"
+    )
     main_timeout_seconds: float = Field(30.0, alias="VLLM_MAIN_TIMEOUT_SECONDS")
 
-    classifier_url: str = Field("http://vllm-classifier:8002", alias="VLLM_CLASSIFIER_URL")
-    classifier_model: str = Field("meta-llama/Llama-Guard-3-8B", alias="VLLM_CLASSIFIER_MODEL")
+    classifier_url: str = Field(
+        "http://vllm-classifier:8002", alias="VLLM_CLASSIFIER_URL"
+    )
+    classifier_model: str = Field(
+        "meta-llama/Llama-Guard-3-8B", alias="VLLM_CLASSIFIER_MODEL"
+    )
     # CRITICAL: 3-second hard timeout on classifier (PRD §8, GUARDRAILS G-001)
-    classifier_timeout_seconds: float = Field(3.0, alias="VLLM_CLASSIFIER_TIMEOUT_SECONDS")
+    classifier_timeout_seconds: float = Field(
+        3.0, alias="VLLM_CLASSIFIER_TIMEOUT_SECONDS"
+    )
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -69,6 +82,25 @@ class SafetyProxySettings(BaseSettings):
     url: str = Field("http://safety-proxy:8080", alias="SAFETY_PROXY_URL")
     # Must match VLLM_CLASSIFIER_TIMEOUT_SECONDS — fail-closed on any timeout
     timeout_seconds: float = Field(3.0, alias="SAFETY_PROXY_TIMEOUT_SECONDS")
+    # Explicitly opt-in for isolated tests only; production/dev runtime stays fail-closed.
+    allow_dev_bypass: bool = Field(False, alias="SAFETY_PROXY_ALLOW_DEV_BYPASS")
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+
+class GovernanceServiceSettings(BaseSettings):
+    """Governance Service endpoint and redundant on-call paging webhook."""
+
+    url: str = Field("http://governance-service:8000", alias="GOVERNANCE_SERVICE_URL")
+    sms_webhook_url: str = Field("", alias="ONCALL_SMS_WEBHOOK_URL")
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+
+class IngestionServiceSettings(BaseSettings):
+    """Document ingestion service boundary."""
+
+    url: str = Field("http://ingestion-service:8000", alias="INGESTION_SERVICE_URL")
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -100,7 +132,9 @@ class AuthSettings(BaseSettings):
 
     jwt_secret_key: str = Field("dev_secret_key", alias="JWT_SECRET_KEY")
     jwt_algorithm: str = Field("HS256", alias="JWT_ALGORITHM")
-    access_token_expire_minutes: int = Field(60, alias="JWT_ACCESS_TOKEN_EXPIRE_MINUTES")
+    access_token_expire_minutes: int = Field(
+        60, alias="JWT_ACCESS_TOKEN_EXPIRE_MINUTES"
+    )
     refresh_token_expire_days: int = Field(30, alias="JWT_REFRESH_TOKEN_EXPIRE_DAYS")
 
     model_config = {"env_file": ".env", "extra": "ignore"}
@@ -135,8 +169,13 @@ class VoiceSettings(BaseSettings):
     whisper_model: str = Field("faster-distil-whisper-large-v3", alias="WHISPER_MODEL")
     kokoro_url: str = Field("http://localhost:8004", alias="KOKORO_URL")
     piper_path: str = Field("piper", alias="PIPER_PATH")
-    voice_classifier_url: str = Field("http://vllm-classifier-voice:8002", alias="VOICE_CLASSIFIER_URL")
-    orchestration_url: str = Field("http://localhost:8000", alias="ORCHESTRATION_URL")
+    voice_classifier_url: str = Field(
+        "http://vllm-classifier-voice:8002", alias="VOICE_CLASSIFIER_URL"
+    )
+    orchestration_url: str = Field(
+        "http://orchestration:8000", alias="ORCHESTRATION_URL"
+    )
+    gateway_url: str = Field("http://voice-gateway:8000", alias="VOICE_GATEWAY_URL")
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -162,11 +201,17 @@ class Settings(BaseSettings):
     environment: str = Field("development", alias="ENVIRONMENT")
     log_level: str = Field("INFO", alias="LOG_LEVEL")
     redis_url: str = Field("redis://localhost:6379/0", alias="REDIS_URL")
+    cors_allowed_origins: str = Field(
+        "http://localhost:3000", alias="CORS_ALLOWED_ORIGINS"
+    )
+    internal_service_token: str = Field("", alias="INTERNAL_SERVICE_TOKEN")
 
     memory_db: MemoryDBSettings = MemoryDBSettings()  # type: ignore[call-arg]
     governance_db: GovernanceDBSettings = GovernanceDBSettings()  # type: ignore[call-arg]
     vllm: VLLMSettings = VLLMSettings()  # type: ignore[call-arg]
     safety_proxy: SafetyProxySettings = SafetyProxySettings()  # type: ignore[call-arg]
+    governance: GovernanceServiceSettings = GovernanceServiceSettings()  # type: ignore[call-arg]
+    ingestion: IngestionServiceSettings = IngestionServiceSettings()  # type: ignore[call-arg]
     langfuse: LangfuseSettings = LangfuseSettings()  # type: ignore[call-arg]
     minio: MinIOSettings = MinIOSettings()  # type: ignore[call-arg]
     auth: AuthSettings = AuthSettings()  # type: ignore[call-arg]
@@ -179,6 +224,19 @@ class Settings(BaseSettings):
     def is_dev(self) -> bool:
         return self.environment == "development"
 
+    def model_post_init(self, __context: object) -> None:
+        if self.environment in {"pilot", "staging", "production"}:
+            if self.auth.jwt_secret_key == "dev_secret_key":
+                raise ValueError("JWT_SECRET_KEY must be set outside development")
+            if self.livekit.api_key == "devkey" or self.livekit.api_secret == "secret":
+                raise ValueError(
+                    "LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set outside development"
+                )
+            if not self.internal_service_token:
+                raise ValueError(
+                    "INTERNAL_SERVICE_TOKEN must be set outside development"
+                )
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
@@ -189,3 +247,16 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+
+def require_internal_service_token(token: str) -> None:
+    """Validate service-to-service calls; development may remain hermetic."""
+    if settings.is_dev:
+        return
+    if not settings.internal_service_token or not hmac.compare_digest(
+        token, settings.internal_service_token
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid internal service token",
+        )

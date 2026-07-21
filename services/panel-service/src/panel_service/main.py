@@ -2,11 +2,11 @@
 FastAPI entry point for the Panel Service.
 Implements: PRD §5 (Multi-Agent Career Panel), SD §4.4 (Panel Microservice).
 """
+
 from __future__ import annotations
 
 import sys
 import os
-from uuid import UUID
 
 from fastapi import FastAPI, HTTPException
 
@@ -22,7 +22,6 @@ from panel_service.models import (
     PanelResponse,
 )
 from panel_service.slm_ocr import QwenSLMOCRService
-
 
 app = FastAPI(
     title="Vadi-Pehn Panel Service",

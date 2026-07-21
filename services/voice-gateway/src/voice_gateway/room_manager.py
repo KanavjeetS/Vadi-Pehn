@@ -3,6 +3,7 @@ LiveKit SFU room management services for Vadi-Pehn.
 Implements: Abstract-first pattern.
 Handles WebRTC signaling handshake, join tokens, and room connections.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -67,34 +68,81 @@ class ProductionLiveKitRoomManager(LiveKitRoomManager):
         self.livekit_url = livekit_url
         self.api_key = api_key
         self.api_secret = api_secret
+        self._rooms: dict[str, Any] = {}
+        self._sources: dict[str, Any] = {}
 
     async def generate_token(self, room_name: str, identity: str) -> str:
         try:
-            # We can use livekit-api if installed or custom JWT token generation
-            import jwt
-            import time
+            from livekit import api
 
-            payload = {
-                "iss": self.api_key,
-                "sub": identity,
-                "nbf": int(time.time()),
-                "exp": int(time.time()) + 3600,
-                "video": {
-                    "room": room_name,
-                    "roomJoin": True,
-                    "canPublish": True,
-                    "canSubscribe": True,
-                },
-            }
-            return jwt.encode(payload, self.api_secret, algorithm="HS256")
-        except Exception:
-            # Fallback if PyJWT is missing
-            return f"token_{room_name}_{identity}"
+            return (
+                api.AccessToken(self.api_key, self.api_secret)
+                .with_identity(identity)
+                .with_grants(
+                    api.VideoGrants(
+                        room_join=True,
+                        room=room_name,
+                        can_publish=True,
+                        can_subscribe=True,
+                    )
+                )
+                .to_jwt()
+            )
+        except ImportError as exc:
+            raise RuntimeError(
+                "livekit-api is required for production room tokens"
+            ) from exc
 
     async def connect_session(self, session_id: str, token: str) -> dict[str, Any]:
-        """Connects or resumes a WebRTC session."""
-        return {"session_id": session_id, "status": "connected", "url": self.livekit_url}
+        """Connect a server-side publisher to the LiveKit room."""
+        try:
+            from livekit import rtc
+
+            room = rtc.Room()
+            await room.connect(self.livekit_url, token)
+            source = rtc.AudioSource(48000, 1)
+            track = rtc.LocalAudioTrack.create_audio_track("vadi-response", source)
+            await room.local_participant.publish_track(track)
+            self._rooms[session_id] = room
+            self._sources[session_id] = source
+            return {
+                "session_id": session_id,
+                "status": "connected",
+                "url": self.livekit_url,
+            }
+        except ImportError as exc:
+            raise RuntimeError(
+                "livekit-rtc is required for production audio publishing"
+            ) from exc
 
     async def stream_audio_to_room(self, room_name: str, audio_data: bytes) -> None:
-        """Publish audio frames to LiveKit SFU room via server API or agent transport."""
-        pass
+        """Publish a WAV/PCM chunk to the connected server publisher."""
+        session_id = room_name.removeprefix("room_")
+        source = self._sources.get(session_id)
+        if source is None:
+            raise RuntimeError("LiveKit session is not connected")
+        pcm, sample_rate = _decode_audio_chunk(audio_data)
+        from livekit import rtc
+
+        await source.capture_frame(
+            rtc.AudioFrame(
+                data=pcm,
+                sample_rate=sample_rate,
+                num_channels=1,
+                samples_per_channel=len(pcm) // 2,
+            )
+        )
+
+
+def _decode_audio_chunk(audio_data: bytes) -> tuple[bytes, int]:
+    """Decode TTS WAV output to signed 16-bit mono PCM for LiveKit."""
+    import io
+    import wave
+
+    try:
+        with wave.open(io.BytesIO(audio_data), "rb") as wav:
+            if wav.getsampwidth() != 2 or wav.getnchannels() != 1:
+                raise ValueError("LiveKit publisher requires mono 16-bit PCM")
+            return wav.readframes(wav.getnframes()), wav.getframerate()
+    except (wave.Error, ValueError):
+        return audio_data, 48000

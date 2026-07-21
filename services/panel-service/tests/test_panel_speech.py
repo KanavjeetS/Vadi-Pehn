@@ -5,13 +5,16 @@ Verifies:
   2. PRD §4 Relational Safety: Sibling handoff framing is present in PanelResponse.
   3. PRD §6.5 Voice TTS: Panel personas generate audio output when TTS service is present.
 """
+
 import sys
 import os
 from uuid import uuid4
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "voice-gateway", "src"))
+sys.path.insert(
+    0, os.path.join(os.path.dirname(__file__), "..", "..", "voice-gateway", "src")
+)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from panel_service.crew import CrewAIPanelRunner
@@ -77,3 +80,13 @@ async def test_panel_persona_speaking_tts_synthesis():
     assert resp.status == "success"
     assert resp.persona_audio_base64 is not None
     assert len(resp.persona_audio_base64) > 0
+
+
+def test_all_catalog_personas_have_versioned_prompts():
+    """Every production catalog code must resolve to a reviewed prompt file."""
+    from panel_service.diversity import DEFAULT_PERSONA_CATALOG
+
+    runner = CrewAIPanelRunner()
+    assert runner.jinja_env is not None
+    for persona in DEFAULT_PERSONA_CATALOG:
+        assert runner.jinja_env.get_template(f"{persona.code.lower()}.jinja2")

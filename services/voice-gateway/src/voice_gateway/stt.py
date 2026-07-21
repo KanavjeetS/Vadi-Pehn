@@ -3,7 +3,10 @@ Speech-to-Text (STT) services for Vadi-Pehn.
 Implements: Abstract-first pattern.
 Enforces the mandatory NO RAW AUDIO RETENTION policy.
 """
+
 from __future__ import annotations
+
+from typing import Any
 
 import httpx
 from voice_gateway.abstractions import STTService
@@ -68,9 +71,9 @@ class WhisperSTTService(STTService):
                 )
                 response.raise_for_status()
                 return response.json().get("text", "")
-        except Exception as e:
-            # Return fallback text representation on failure instead of propagating raw error
-            return f"[Transcription Failed: {str(e)}]"
+        except Exception:
+            # Fail closed: never turn a transport/error string into a child-facing prompt.
+            return ""
         finally:
             # MANDATORY CHILD-SAFETY COMPLIANCE: Overwrite and purge buffer references
             # Ensures zero raw voice audio retention after the transcription step (PRD §3.4)
@@ -78,8 +81,11 @@ class WhisperSTTService(STTService):
                 for i in range(len(audio_data)):
                     audio_data[i] = 0
             del audio_data
+
+
 class ZeroRetentionVerifier:
     """Helper class to audit and verify no raw audio variables leak."""
+
     @staticmethod
     def verify_buffer_purged(var: Any) -> bool:
         return var is None

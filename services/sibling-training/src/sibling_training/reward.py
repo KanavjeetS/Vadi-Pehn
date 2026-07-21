@@ -2,13 +2,12 @@
 Reward model client and shaping engine for GRPO / RLHF alignment of the Vadi-Pehn Sibling LLM.
 Implements: PRD §8 (Safety & Alignment), SD §10 (GRPO Reward Shaping with Aegis 2.0 / LlamaGuard).
 """
+
 from __future__ import annotations
 
 import httpx
-from typing import Any
 from sibling_training.abstractions import RewardModelClient, RewardScore
 from sibling_training.pii_scrubber import RegexPIIScrubber
-
 
 DEPENDENCY_CREATING_PHRASES = {
     "i am your only friend",
@@ -28,7 +27,16 @@ RAPPORT_ENCOURAGEMENT_PHRASES = {
     "that is a wonderful goal",
 }
 
-REFUSAL_PREFIXES = ("not ", "cannot ", "can't ", "never ", "don't ", "do not ", "will not ", "won't ")
+REFUSAL_PREFIXES = (
+    "not ",
+    "cannot ",
+    "can't ",
+    "never ",
+    "don't ",
+    "do not ",
+    "will not ",
+    "won't ",
+)
 
 
 def _check_dependency_violation(text_lower: str) -> str | None:
@@ -49,12 +57,18 @@ class LlamaGuardRewardModel(RewardModelClient):
     plus developmental and rapport shaping penalties/bonuses.
     """
 
-    def __init__(self, classifier_url: str = "http://localhost:8002", http_client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        classifier_url: str = "http://localhost:8002",
+        http_client: httpx.AsyncClient | None = None,
+    ) -> None:
         self.classifier_url = classifier_url.rstrip("/")
         self._http_client = http_client
         self.scrubber = RegexPIIScrubber()
 
-    async def compute_reward(self, prompt: str, completion: str, age_band: int = 2) -> RewardScore:
+    async def compute_reward(
+        self, prompt: str, completion: str, age_band: int = 2
+    ) -> RewardScore:
         """Score completion against child safety, developmental appropriateness, and healthy rapport."""
         completion_lower = completion.lower()
         reasoning = []
@@ -80,7 +94,9 @@ class LlamaGuardRewardModel(RewardModelClient):
                 reasoning.append("Rapport/encouragement bonus")
                 break
 
-        developmental_bonus = 0.5 if len(completion.split()) >= 8 and "?" in completion else 0.0
+        developmental_bonus = (
+            0.5 if len(completion.split()) >= 8 and "?" in completion else 0.0
+        )
         if developmental_bonus > 0:
             reasoning.append("Interactive questioning bonus")
 
@@ -100,7 +116,9 @@ class LlamaGuardRewardModel(RewardModelClient):
                 timeout=3.0,
             )
             if response.status_code == 200:
-                output = response.json()["choices"][0]["message"]["content"].strip().lower()
+                output = (
+                    response.json()["choices"][0]["message"]["content"].strip().lower()
+                )
                 if output.startswith("unsafe"):
                     safety_penalty = -5.0
                     reasoning.append(f"LlamaGuard unsafe: {output}")
@@ -113,7 +131,14 @@ class LlamaGuardRewardModel(RewardModelClient):
 
         # Compute total score clipped between -5.0 and +5.0
         base_score = 1.0 if safety_penalty == 0.0 else 0.0
-        total = base_score + safety_penalty + dependency_penalty + pii_penalty + rapport_bonus + developmental_bonus
+        total = (
+            base_score
+            + safety_penalty
+            + dependency_penalty
+            + pii_penalty
+            + rapport_bonus
+            + developmental_bonus
+        )
         total = max(-5.0, min(5.0, total))
 
         return RewardScore(
@@ -126,7 +151,9 @@ class LlamaGuardRewardModel(RewardModelClient):
             reasoning_summary="; ".join(reasoning) if reasoning else "Clean safe turn",
         )
 
-    async def compute_batch_rewards(self, prompts: list[str], completions: list[str], age_band: int = 2) -> list[RewardScore]:
+    async def compute_batch_rewards(
+        self, prompts: list[str], completions: list[str], age_band: int = 2
+    ) -> list[RewardScore]:
         """Compute rewards for a batch of candidate completions sequentially or concurrently."""
         scores = []
         for p, c in zip(prompts, completions):
@@ -141,7 +168,9 @@ class MockRewardModel(RewardModelClient):
     Implements: AGENTS.md Part 3 (Abstract-first mock requirement).
     """
 
-    async def compute_reward(self, prompt: str, completion: str, age_band: int = 2) -> RewardScore:
+    async def compute_reward(
+        self, prompt: str, completion: str, age_band: int = 2
+    ) -> RewardScore:
         completion_lower = completion.lower()
         if any(w in completion_lower for w in ("kill", "suicide", "hit you", "unsafe")):
             return RewardScore(
@@ -156,12 +185,21 @@ class MockRewardModel(RewardModelClient):
                 dependency_penalty=-3.0,
                 reasoning_summary=f"Simulated dependency phrase: '{violated_phrase}'",
             )
-        rapport_bonus = 0.5 if any(w in completion_lower for w in RAPPORT_ENCOURAGEMENT_PHRASES) else 0.0
+        rapport_bonus = (
+            0.5
+            if any(w in completion_lower for w in RAPPORT_ENCOURAGEMENT_PHRASES)
+            else 0.0
+        )
         return RewardScore(
             total_score=1.0 + rapport_bonus,
             rapport_bonus=rapport_bonus,
             reasoning_summary="Simulated clean completion",
         )
 
-    async def compute_batch_rewards(self, prompts: list[str], completions: list[str], age_band: int = 2) -> list[RewardScore]:
-        return [await self.compute_reward(p, c, age_band) for p, c in zip(prompts, completions)]
+    async def compute_batch_rewards(
+        self, prompts: list[str], completions: list[str], age_band: int = 2
+    ) -> list[RewardScore]:
+        return [
+            await self.compute_reward(p, c, age_band)
+            for p, c in zip(prompts, completions)
+        ]

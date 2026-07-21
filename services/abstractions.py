@@ -10,6 +10,7 @@ Every module talking to an external system (LLM, DB, HTTP) exposes:
 WHAT THIS IS: Shared interface definitions and safety type hierarchy.
 WHAT THIS IS NOT: Production implementations (those live in each service).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -17,9 +18,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, AsyncIterator
 from uuid import UUID
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Safety Types — used by every service that touches generation or safety checks
@@ -36,7 +36,7 @@ class SafetyVerdictCode(str, Enum):
     """
 
     SAFE = "safe"
-    UNSAFE_SELF_HARM = "unsafe_self_harm"       # Aegis S6 taxonomy
+    UNSAFE_SELF_HARM = "unsafe_self_harm"  # Aegis S6 taxonomy
     UNSAFE_ABUSE_DISCLOSURE = "unsafe_abuse_disclosure"
     UNSAFE_GENERAL = "unsafe_general"
     CLASSIFIER_UNAVAILABLE = "classifier_unavailable"  # timeout / exception
@@ -153,14 +153,18 @@ class MockSafetyClient(SafetyClient):
         self.input_calls: list[dict[str, Any]] = []
         self.output_calls: list[dict[str, Any]] = []
 
-    async def check_input(self, *, learner_id: UUID, message_text: str, age_band: int, tenant_id: UUID) -> SafetyVerdict:
+    async def check_input(
+        self, *, learner_id: UUID, message_text: str, age_band: int, tenant_id: UUID
+    ) -> SafetyVerdict:
         self.input_calls.append({"learner_id": learner_id, "text": message_text})
         for pattern in self.blocked_substrings:
             if pattern.lower() in message_text.lower():
                 return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_GENERAL)
         return SafetyVerdict(code=self.default_verdict)
 
-    async def check_output(self, *, learner_id: UUID, draft_reply_text: str, tenant_id: UUID) -> SafetyVerdict:
+    async def check_output(
+        self, *, learner_id: UUID, draft_reply_text: str, tenant_id: UUID
+    ) -> SafetyVerdict:
         self.output_calls.append({"learner_id": learner_id, "text": draft_reply_text})
         for pattern in self.blocked_substrings:
             if pattern.lower() in draft_reply_text.lower():
@@ -244,8 +248,18 @@ class InMemoryVectorStore(MemoryStore):
         # {tenant_id: {learner_id: [MemoryChunk]}}
         self._store: dict[str, dict[str, list[MemoryChunk]]] = {}
 
-    async def write(self, *, tenant_id: UUID, learner_id: UUID, content: str, embedding: list[float], metadata: dict[str, Any] | None = None) -> str:
-        chunk_id = hashlib.sha256(f"{tenant_id}{learner_id}{content}".encode()).hexdigest()[:16]
+    async def write(
+        self,
+        *,
+        tenant_id: UUID,
+        learner_id: UUID,
+        content: str,
+        embedding: list[float],
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        chunk_id = hashlib.sha256(
+            f"{tenant_id}{learner_id}{content}".encode()
+        ).hexdigest()[:16]
         tenant_key = str(tenant_id)
         learner_key = str(learner_id)
         self._store.setdefault(tenant_key, {}).setdefault(learner_key, [])
@@ -262,7 +276,14 @@ class InMemoryVectorStore(MemoryStore):
         )
         return chunk_id
 
-    async def query(self, *, tenant_id: UUID, learner_id: UUID, query_embedding: list[float], k: int = 5) -> list[MemoryChunk]:
+    async def query(
+        self,
+        *,
+        tenant_id: UUID,
+        learner_id: UUID,
+        query_embedding: list[float],
+        k: int = 5,
+    ) -> list[MemoryChunk]:
         chunks = self._store.get(str(tenant_id), {}).get(str(learner_id), [])
         return chunks[-k:] if chunks else []
 
@@ -273,6 +294,7 @@ class InMemoryVectorStore(MemoryStore):
 
     async def prune_expired(self, *, retention_months: int = 18) -> int:
         from datetime import timedelta
+
         cutoff = datetime.now(timezone.utc) - timedelta(days=retention_months * 30)
         pruned = 0
         for tenant_store in self._store.values():
@@ -309,6 +331,26 @@ class LLMClient(ABC):
         """Generate a reply. Stream=True returns sentence chunks for voice path."""
         ...
 
+    async def stream(
+        self,
+        *,
+        messages: list[dict[str, str]],
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+    ) -> AsyncIterator[str]:
+        """Yield provider chunks; production clients may override for token streaming."""
+        result = await self.generate(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True,
+        )
+        if isinstance(result, str):
+            yield result
+            return
+        for chunk in result:
+            yield chunk
+
 
 class MockLLMClient(LLMClient):
     """
@@ -324,7 +366,14 @@ class MockLLMClient(LLMClient):
         self.call_count = 0
         self.calls: list[dict[str, Any]] = []
 
-    async def generate(self, *, messages: list[dict[str, str]], max_tokens: int = 512, temperature: float = 0.7, stream: bool = False) -> str | list[str]:
+    async def generate(
+        self,
+        *,
+        messages: list[dict[str, str]],
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+        stream: bool = False,
+    ) -> str | list[str]:
         self.call_count += 1
         self.calls.append({"messages": messages, "max_tokens": max_tokens})
         if stream:

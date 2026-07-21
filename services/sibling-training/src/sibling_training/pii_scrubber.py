@@ -3,6 +3,7 @@ PII Scrubber implementation for Vadi-Pehn corpus preparation and fine-tuning.
 Implements: Child Safety Non-Negotiable #3 & #5, PRD §3.4 (Data Privacy & Scrubber).
 Guarantees zero real learner PII or unscrubbed disclosures enter any SFT or RLHF training dataset.
 """
+
 from __future__ import annotations
 
 import re
@@ -16,11 +17,17 @@ class RegexPIIScrubber(BasePIIScrubber):
     """
 
     def __init__(self) -> None:
-        self.email_pattern = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b")
+        self.email_pattern = re.compile(
+            r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b"
+        )
         # India 10-digit mobile (+91 optional) or international 3-3-4
-        self.phone_pattern = re.compile(r"\b(?:(?:\+?91[\-\s]?)?[6-9]\d{9}|\d{3}[-\.\s]\d{3}[-\.\s]\d{4})\b")
+        self.phone_pattern = re.compile(
+            r"\b(?:(?:\+?91[\-\s]?)?[6-9]\d{9}|\d{3}[-\.\s]\d{3}[-\.\s]\d{4})\b"
+        )
         # Aadhaar (12 digits with optional hyphens/spaces) or SSN (3-2-4)
-        self.id_pattern = re.compile(r"\b(?:\d{4}[\s-]?\d{4}[\s-]?\d{4}|\d{3}[-\s]?\d{2}[-\s]?\d{4})\b")
+        self.id_pattern = re.compile(
+            r"\b(?:\d{4}[\s-]?\d{4}[\s-]?\d{4}|\d{3}[-\s]?\d{2}[-\s]?\d{4})\b"
+        )
         # Common address indicators
         self.address_pattern = re.compile(
             r"\b\d{1,5}\s+(?:[A-Za-z0-9\s.-]+?)\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Nagar|Colony|Apartments?|Apts?)\b",

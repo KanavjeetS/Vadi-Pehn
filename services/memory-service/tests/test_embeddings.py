@@ -2,11 +2,16 @@
 Unit tests for EmbeddingClient and RerankerClient (`services/memory-service/tests/test_embeddings.py`).
 Verifies unit normalization, reproducibility, and mock reranking boosts.
 """
+
 import math
 import pytest
 
 from memory_service.abstractions import ScoredMemoryItem
-from memory_service.embeddings import MockEmbeddingClient, MockRerankerClient, NomicEmbeddingClient
+from memory_service.embeddings import (
+    MockEmbeddingClient,
+    MockRerankerClient,
+    NomicEmbeddingClient,
+)
 
 
 @pytest.mark.asyncio

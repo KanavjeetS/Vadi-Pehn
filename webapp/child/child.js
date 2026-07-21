@@ -3,9 +3,22 @@ let childTurnCount = 1;
 const MAX_TURNS = 20;
 let learnerAuthToken = "";
 
+function childContext() {
+    const context = {
+        token: sessionStorage.getItem('vadi_access_token') || learnerAuthToken,
+        tenantId: sessionStorage.getItem('vadi_tenant_id'),
+        learnerId: sessionStorage.getItem('vadi_learner_id')
+    };
+    if (!context.token || !context.tenantId || !context.learnerId) {
+        throw new Error('Learner authentication is required.');
+    }
+    return context;
+}
+
 async function initChildAuth() {
     // Generate/fetch signed learner role token
     try {
+        const context = childContext();
         const res = await fetch('/api/v1/turn', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -36,12 +49,12 @@ async function sendChildTurn(event) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${learnerAuthToken || 'mock_learner_token'}`
+                'Authorization': `Bearer ${context.token}`
             },
             body: JSON.stringify({
-                session_id: 'child_sess_01',
-                tenant_id: '00000000-0000-0000-0000-000000000001',
-                learner_id: '00000000-0000-0000-0000-000000000002',
+                session_id: crypto.randomUUID(),
+                tenant_id: context.tenantId,
+                learner_id: context.learnerId,
                 age_band: ageBand,
                 message_text: text,
                 language: lang
@@ -60,14 +73,16 @@ async function sendChildTurn(event) {
             }
             appendMsg(reply, 'assistant', 'safe');
         } else {
-            simulateChildReply(text);
+            throw new Error(`Turn failed (${res.status})`);
         }
     } catch (e) {
-        simulateChildReply(text);
+        appendMsg(`Unable to reach Vadi: ${e.message}`, 'system', 'error');
     }
 }
 
 function simulateChildReply(text) {
+    throw new Error('Local turn simulation has been removed; live API required.');
+    /*
     childTurnCount++;
     document.getElementById('turn-count').innerText = childTurnCount;
 
@@ -80,7 +95,7 @@ function simulateChildReply(text) {
     if (childTurnCount % 5 === 0 || attachmentTerms.some(t => text.toLowerCase().includes(t))) {
         reply += " (jaise maine bataya, main ek AI mentor hoon, asli brother nahi, par tumhari madad karke mujhe bahut khushi hoti hai)";
     }
-    appendMsg(reply, 'assistant', 'safe');
+    appendMsg(reply, 'assistant', 'safe'); */
 }
 
 function appendMsg(text, role, verdict = 'safe') {

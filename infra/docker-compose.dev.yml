@@ -198,8 +198,8 @@ services:
         def log_message(self, *args): pass
       http.server.HTTPServer(('',8001),H).serve_forever()
       "
-    ports:
-      - "8001:8001"
+    expose:
+      - "8001"
     networks:
       - vadi-llm-backend
 
@@ -218,7 +218,7 @@ services:
         def log_message(self, *args): pass
       http.server.HTTPServer(('',8002),H).serve_forever()
       "
-    ports:
-      - "8002:8002"
+    expose:
+      - "8002"
     networks:
       - vadi-llm-backend

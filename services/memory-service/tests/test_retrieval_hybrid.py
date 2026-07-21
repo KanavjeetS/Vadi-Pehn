@@ -3,7 +3,7 @@ Unit tests for HybridRetrievalEngine (`services/memory-service/tests/test_retrie
 Verifies HNSW dense scoring, full-text BM25 sparse scoring, Reciprocal Rank Fusion (RRF),
 and RLS transaction scoping (`SET LOCAL app.current_tenant_id = $1`).
 """
-import json
+
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -90,7 +90,9 @@ async def test_hybrid_retrieval_engine_merges_dense_and_sparse_with_rrf():
     # Verify RLS and scan order executed inside transaction
     executed_sql = [q[0] for q in mock_conn.executed_queries]
     assert any("SET LOCAL app.current_tenant_id" in sql for sql in executed_sql)
-    assert any("SET LOCAL hnsw.iterative_scan = relaxed_order" in sql for sql in executed_sql)
+    assert any(
+        "SET LOCAL hnsw.iterative_scan = relaxed_order" in sql for sql in executed_sql
+    )
 
     # Verify RRF scoring:
     # Item B appeared in both (#2 dense, #1 sparse): RRF = 1/(60+2) + 1/(60+1) = 0.016129 + 0.016393 = 0.032522

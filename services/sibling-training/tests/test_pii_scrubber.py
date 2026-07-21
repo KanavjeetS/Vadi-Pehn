@@ -3,11 +3,12 @@ Unit tests for the PII scrubber verifying complete redaction of raw disclosures,
 emails, phone numbers, and IDs before entering SFT/RLHF training datasets.
 Implements: Child Safety Non-Negotiable #3 & #5.
 """
+
 from __future__ import annotations
 
-import pytest
 import sys
 import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from sibling_training.pii_scrubber import RegexPIIScrubber
@@ -35,6 +36,14 @@ def test_scrubber_redacts_aadhaar_ssn():
 
 def test_verify_synthetic_compliance_detects_raw_pii():
     scrubber = RegexPIIScrubber()
-    assert scrubber.verify_synthetic_compliance("Hello, let's learn algebra today.") is True
-    assert scrubber.verify_synthetic_compliance("Contact me at secret@gmail.com immediately.") is False
+    assert (
+        scrubber.verify_synthetic_compliance("Hello, let's learn algebra today.")
+        is True
+    )
+    assert (
+        scrubber.verify_synthetic_compliance(
+            "Contact me at secret@gmail.com immediately."
+        )
+        is False
+    )
     assert scrubber.verify_synthetic_compliance("Call +91-9123456789 now.") is False

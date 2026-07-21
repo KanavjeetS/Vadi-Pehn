@@ -8,15 +8,16 @@ Critical assertions:
   3. Governance incident IS created on self-harm input
   4. Final reply is NEVER the raw draft if output safety blocks it
 """
+
 from __future__ import annotations
 
-import asyncio
 import uuid
 
 import pytest
-import pytest_asyncio
 
-import sys, os
+import sys
+import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 
 from services.abstractions import (
@@ -25,7 +26,11 @@ from services.abstractions import (
     MockSafetyClient,
     SafetyVerdictCode,
 )
-from services.orchestration.src.orchestration.graph import OrchestrationGraph, TurnState
+from services.orchestration.src.orchestration.graph import (
+    GovernanceIncidentClient,
+    OrchestrationGraph,
+    TurnState,
+)
 
 
 def _make_ids() -> dict[str, str]:
@@ -48,9 +53,21 @@ def safe_graph() -> OrchestrationGraph:
 
 @pytest.fixture
 def self_harm_graph() -> OrchestrationGraph:
-    """Graph where safety client returns UNSAFE_SELF_HARM for all inputs."""
+    """Graph with unsafe input and a safe output rail for the fixed script."""
+
+    class SelfHarmSafetyClient(MockSafetyClient):
+        async def check_input(self, *, learner_id, message_text, age_band, tenant_id):
+            from services.abstractions import SafetyVerdict
+
+            return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_SELF_HARM)
+
+        async def check_output(self, *, learner_id, draft_reply_text, tenant_id):
+            from services.abstractions import SafetyVerdict
+
+            return SafetyVerdict(code=SafetyVerdictCode.SAFE)
+
     return OrchestrationGraph(
-        safety_client=MockSafetyClient(default_verdict=SafetyVerdictCode.UNSAFE_SELF_HARM),
+        safety_client=SelfHarmSafetyClient(),
         memory_store=InMemoryVectorStore(),
         llm_client=MockLLMClient(reply="should never be seen"),
     )
@@ -59,9 +76,11 @@ def self_harm_graph() -> OrchestrationGraph:
 @pytest.fixture
 def unsafe_output_graph() -> OrchestrationGraph:
     """Graph where input is SAFE but output check returns UNSAFE_GENERAL."""
+
     class MixedSafetyClient(MockSafetyClient):
         async def check_output(self, *, learner_id, draft_reply_text, tenant_id):
             from services.abstractions import SafetyVerdict
+
             return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_GENERAL)
 
     return OrchestrationGraph(
@@ -75,8 +94,11 @@ def unsafe_output_graph() -> OrchestrationGraph:
 # INVARIANT 1: Unsafe input never reaches LLM (GUARDRAILS G-001)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
-async def test_unsafe_input_never_calls_llm(self_harm_graph: OrchestrationGraph) -> None:
+async def test_unsafe_input_never_calls_llm(
+    self_harm_graph: OrchestrationGraph,
+) -> None:
     """
     CRITICAL: LLM must NOT be called when input safety verdict is non-SAFE.
     If this test fails, GUARDRAILS G-001 is violated.
@@ -98,31 +120,41 @@ async def test_unsafe_input_never_calls_llm(self_harm_graph: OrchestrationGraph)
 # INVARIANT 2: Output safety IS called on every safe turn
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
-async def test_output_safety_called_on_safe_turn(safe_graph: OrchestrationGraph) -> None:
+async def test_output_safety_called_on_safe_turn(
+    safe_graph: OrchestrationGraph,
+) -> None:
     """Output safety client must be called even on fully safe turns (GUARDRAILS G-004)."""
     ids = _make_ids()
-    await safe_graph.run_turn(**ids, age_band=1, message_text="aaj school mein kya hua?")
+    await safe_graph.run_turn(
+        **ids, age_band=1, message_text="aaj school mein kya hua?"
+    )
     assert len(safe_graph.safety_client.output_calls) == 1  # type: ignore[attr-defined]
-    assert len(safe_graph.safety_client.input_calls) == 1   # type: ignore[attr-defined]
+    assert len(safe_graph.safety_client.input_calls) == 1  # type: ignore[attr-defined]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # INVARIANT 3: Unsafe output never reaches child
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
-async def test_unsafe_output_replaced_with_fallback(unsafe_output_graph: OrchestrationGraph) -> None:
+async def test_unsafe_output_replaced_with_fallback(
+    unsafe_output_graph: OrchestrationGraph,
+) -> None:
     """
     If output safety blocks the draft reply, final_reply must NOT be the draft.
     Child must receive a safe fallback, not an unsafe LLM output.
     """
     ids = _make_ids()
-    result = await unsafe_output_graph.run_turn(**ids, age_band=1, message_text="hello!")
-    assert result.draft_reply == "[MOCK REPLY]"
-    assert result.final_reply != "[MOCK REPLY]", (
-        "Unsafe output leaked to final_reply — output safety gate bypassed"
+    result = await unsafe_output_graph.run_turn(
+        **ids, age_band=1, message_text="hello!"
     )
+    assert result.draft_reply == "[MOCK REPLY]"
+    assert (
+        result.final_reply != "[MOCK REPLY]"
+    ), "Unsafe output leaked to final_reply — output safety gate bypassed"
     assert result.safety_verdict_output is not None
     assert result.safety_verdict_output["blocks_generation"] is True
 
@@ -131,8 +163,11 @@ async def test_unsafe_output_replaced_with_fallback(unsafe_output_graph: Orchest
 # INVARIANT 4: Governance incident created on self-harm
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
-async def test_incident_created_on_self_harm(self_harm_graph: OrchestrationGraph) -> None:
+async def test_incident_created_on_self_harm(
+    self_harm_graph: OrchestrationGraph,
+) -> None:
     """Safety incident must be created when self-harm classifier fires (PRD §3.3)."""
     ids = _make_ids()
     result = await self_harm_graph.run_turn(**ids, age_band=2, message_text="trigger")
@@ -140,9 +175,39 @@ async def test_incident_created_on_self_harm(self_harm_graph: OrchestrationGraph
     assert len(result.incident_id) > 0
 
 
+@pytest.mark.asyncio
+async def test_incident_is_sent_to_governance_client() -> None:
+    class FakeGovernanceClient(GovernanceIncidentClient):
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def create_incident(self, **kwargs):
+            self.calls.append(kwargs)
+            return "inc_governance_test"
+
+    governance = FakeGovernanceClient()
+    graph = OrchestrationGraph(
+        safety_client=MockSafetyClient(
+            default_verdict=SafetyVerdictCode.UNSAFE_SELF_HARM
+        ),
+        memory_store=InMemoryVectorStore(),
+        llm_client=MockLLMClient(),
+        governance_client=governance,
+    )
+    ids = _make_ids()
+
+    result = await graph.run_turn(
+        **ids, age_band=2, message_text="synthetic safety case"
+    )
+
+    assert result.incident_id == "inc_governance_test"
+    assert governance.calls[0]["category"] == "unsafe_self_harm"
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # INVARIANT 5: Classifier unavailable → blocks generation (fail-closed)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_classifier_unavailable_blocks_generation() -> None:
@@ -151,12 +216,14 @@ async def test_classifier_unavailable_blocks_generation() -> None:
     GUARDRAILS G-001: fail-closed — UNAVAILABLE never means 'proceed'.
     """
     unavailable_graph = OrchestrationGraph(
-        safety_client=MockSafetyClient(default_verdict=SafetyVerdictCode.CLASSIFIER_UNAVAILABLE),
+        safety_client=MockSafetyClient(
+            default_verdict=SafetyVerdictCode.CLASSIFIER_UNAVAILABLE
+        ),
         memory_store=InMemoryVectorStore(),
         llm_client=MockLLMClient(reply="should not be seen"),
     )
     ids = _make_ids()
-    result = await unavailable_graph.run_turn(**ids, age_band=1, message_text="hello")
+    await unavailable_graph.run_turn(**ids, age_band=1, message_text="hello")
     assert unavailable_graph.llm_client.call_count == 0, (  # type: ignore[attr-defined]
         "GUARDRAILS G-001 VIOLATION: classifier_unavailable must block generation"
     )
@@ -165,6 +232,7 @@ async def test_classifier_unavailable_blocks_generation() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # INVARIANT 6: Happy path produces final reply
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_happy_path_produces_reply(safe_graph: OrchestrationGraph) -> None:
@@ -183,11 +251,14 @@ async def test_happy_path_produces_reply(safe_graph: OrchestrationGraph) -> None
 # INVARIANT 7: Memory write after turn (not blocking)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_memory_written_after_safe_turn(safe_graph: OrchestrationGraph) -> None:
     """After a safe turn, memory should contain the conversation exchange."""
     ids = _make_ids()
-    await safe_graph.run_turn(**ids, age_band=1, message_text="mujhe cricket pasand hai")
+    await safe_graph.run_turn(
+        **ids, age_band=1, message_text="mujhe cricket pasand hai"
+    )
     chunks = await safe_graph.memory_store.query(
         tenant_id=__import__("uuid").UUID(ids["tenant_id"]),
         learner_id=__import__("uuid").UUID(ids["learner_id"]),
@@ -201,6 +272,7 @@ async def test_memory_written_after_safe_turn(safe_graph: OrchestrationGraph) ->
 # ─────────────────────────────────────────────────────────────────────────────
 # INVARIANT 8: Emotional Safety, AI Disclosure & Session Cap (PRD §4)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_session_cap_wind_down(safe_graph: OrchestrationGraph) -> None:
@@ -232,4 +304,3 @@ async def test_ai_identity_disclosure(safe_graph: OrchestrationGraph) -> None:
     res_state = TurnState(**result)
     assert res_state.ai_disclosure_added is True
     assert "main ek ai mentor hoon" in res_state.draft_reply.lower()
-

@@ -2,7 +2,6 @@
 Unit tests for SentenceBoundaryChunker (`services/memory-service/tests/test_chunker.py`).
 Verifies sentence-boundary preservation for child tutoring dialogue (implementation_plan.md §4A).
 """
-import pytest
 
 from memory_service.chunker import SentenceBoundaryChunker
 

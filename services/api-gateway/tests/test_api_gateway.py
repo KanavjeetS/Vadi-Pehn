@@ -5,10 +5,10 @@ Verifies:
   2. Bearer token authentication enforcement.
   3. Rate limiting protection.
 """
+
 import sys
 import os
 import uuid
-import pytest
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -94,3 +94,20 @@ def test_document_upload():
     assert res.status_code == 200
     data = res.json()
     assert data["redaction_verified"] is True
+
+
+def test_turn_rejects_body_scope_mismatch():
+    tenant_id = str(uuid.uuid4())
+    learner_id = str(uuid.uuid4())
+    token = create_jwt_token(user_id=learner_id, tenant_id=tenant_id, role="learner")
+    payload = {
+        "session_id": str(uuid.uuid4()),
+        "tenant_id": str(uuid.uuid4()),
+        "learner_id": learner_id,
+        "age_band": 2,
+        "message_text": "hello",
+    }
+    res = client.post(
+        "/api/v1/turn", json=payload, headers={"Authorization": f"Bearer {token}"}
+    )
+    assert res.status_code == 403

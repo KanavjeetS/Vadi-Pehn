@@ -4,12 +4,12 @@ and 18-month TTL enforcement (`services/memory-service/write_pipeline.py`).
 Implements: PRD §3.2 (Consent checks before storage), PRD §3.4 (18-month retention TTL),
 SD §3.1 & §5.1, implementation_plan.md §4D.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -24,6 +24,7 @@ logger = logging.getLogger("memory_service.write_pipeline")
 
 class ConsentDeniedWriteAbort(Exception):
     """Raised when memory ingestion is attempted without active parental/learner consent."""
+
     pass
 
 
@@ -36,11 +37,15 @@ class PostgresConsentChecker(ConsentCheckerClient):
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
 
-    async def check_memory_write_consent(self, tenant_id: UUID, learner_id: UUID) -> bool:
+    async def check_memory_write_consent(
+        self, tenant_id: UUID, learner_id: UUID
+    ) -> bool:
         async with self._pool.acquire() as conn:
             async with conn.transaction():
                 # Enforce RLS on consent verification
-                await conn.execute("SET LOCAL app.current_tenant_id = $1", str(tenant_id))
+                await conn.execute(
+                    "SET LOCAL app.current_tenant_id = $1", str(tenant_id)
+                )
                 status = await conn.fetchval(
                     """
                     SELECT status FROM consent_records
@@ -90,7 +95,9 @@ class AsyncMemoryWriter:
         Raises `ConsentDeniedWriteAbort` if consent check returns False.
         """
         # 1. Mandatory Governance Consent Gate (PRD §3.2)
-        has_consent = await self.consent_checker.check_memory_write_consent(tenant_id, learner_id)
+        has_consent = await self.consent_checker.check_memory_write_consent(
+            tenant_id, learner_id
+        )
         if not has_consent:
             logger.warning(
                 f"ConsentDeniedWriteAbort: Learner {learner_id} (Tenant {tenant_id}) lacks active memory_storage consent. Write aborted."
@@ -111,7 +118,9 @@ class AsyncMemoryWriter:
         async with self._pool.acquire() as conn:
             async with conn.transaction():
                 # Enforce RLS for write transaction (GUARDRAILS G-002)
-                await conn.execute("SET LOCAL app.current_tenant_id = $1", str(tenant_id))
+                await conn.execute(
+                    "SET LOCAL app.current_tenant_id = $1", str(tenant_id)
+                )
 
                 for chunk_text, vec in zip(chunks, embeddings):
                     embedding_str = "[" + ",".join(str(f) for f in vec) + "]"

@@ -2,10 +2,10 @@
 Data Transfer Objects and Pydantic models for Guardian Dashboard BFF.
 Implements: coding-standards §3 (full type hints on dataclass/pydantic models).
 """
+
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 from pydantic import BaseModel
 
@@ -16,7 +16,9 @@ class LearnerActivitySummary(BaseModel):
     age_band: int
     active_relationships_count: int
     last_session_at: datetime
-    relationship_health_trend: str = "healthy"  # 'healthy' | 'over_engaged' | 'withdrawn' (PRD §4.4)
+    relationship_health_trend: str = (
+        "healthy"  # 'healthy' | 'over_engaged' | 'withdrawn' (PRD §4.4)
+    )
 
 
 class GuardianOverview(BaseModel):

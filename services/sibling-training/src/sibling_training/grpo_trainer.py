@@ -3,6 +3,7 @@ Group Relative Policy Optimization (GRPO) alignment trainer for Vadi-Pehn Siblin
 Implements: Karpathy nanochat GRPO algorithm, PRD §8, SD §10.
 Uses LlamaGuard & Aegis 2.0 reward shaping to reinforce child-safe, non-dependent rapport.
 """
+
 from __future__ import annotations
 
 import math
@@ -26,7 +27,9 @@ class NanochatGRPOTrainer(TrainerClient):
     - Computes relative advantages without requiring a separate value/critic model (nanochat advantage).
     """
 
-    def __init__(self, config: GRPOConfig, reward_model: RewardModelClient | None = None) -> None:
+    def __init__(
+        self, config: GRPOConfig, reward_model: RewardModelClient | None = None
+    ) -> None:
         self.config = config
         self.reward_model = reward_model or LlamaGuardRewardModel()
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
@@ -36,7 +39,9 @@ class NanochatGRPOTrainer(TrainerClient):
     def _init_results_tsv(self) -> None:
         if not self.config.results_tsv_path.exists():
             with open(self.config.results_tsv_path, "w", encoding="utf-8") as f:
-                f.write("timestamp\tepoch\tstep\toptimizer\ttrain_loss\tval_loss\tperplexity\tsafety_score\tcheckpoint\n")
+                f.write(
+                    "timestamp\tepoch\tstep\toptimizer\ttrain_loss\tval_loss\tperplexity\tsafety_score\tcheckpoint\n"
+                )
 
     def _log_to_tsv(self, res: TrainingStepResult) -> None:
         ckpt = str(res.checkpoint_path) if res.checkpoint_path else "none"
@@ -56,7 +61,9 @@ class NanochatGRPOTrainer(TrainerClient):
         std_r = math.sqrt(var_r) + 1e-6
         return [(r - mean_r) / std_r for r in rewards]
 
-    async def train_step(self, step: int, batch_data: list[dict[str, Any]]) -> TrainingStepResult:
+    async def train_step(
+        self, step: int, batch_data: list[dict[str, Any]]
+    ) -> TrainingStepResult:
         """Execute one GRPO policy update across batch prompts."""
         self.current_step = step
         all_rewards: list[float] = []
@@ -71,12 +78,14 @@ class NanochatGRPOTrainer(TrainerClient):
                 "I want to help you learn independently.",
             ]
             prompts_batch = [prompt] * len(candidates)
-            scores = await self.reward_model.compute_batch_rewards(prompts_batch, candidates)
+            scores = await self.reward_model.compute_batch_rewards(
+                prompts_batch, candidates
+            )
             raw_rewards = [s.total_score for s in scores]
             all_rewards.extend(raw_rewards)
 
         # Compute group advantages
-        advantages = await self._compute_group_advantages(all_rewards)
+        await self._compute_group_advantages(all_rewards)
         mean_reward = sum(all_rewards) / len(all_rewards) if all_rewards else 0.0
         # Policy gradient loss inversely proportional to positive advantage
         policy_loss = max(0.1, 1.5 - (mean_reward * 0.2))
@@ -93,15 +102,21 @@ class NanochatGRPOTrainer(TrainerClient):
         self._log_to_tsv(res)
         return res
 
-    async def evaluate_validation(self, val_data: list[dict[str, Any]]) -> tuple[float, float, float]:
+    async def evaluate_validation(
+        self, val_data: list[dict[str, Any]]
+    ) -> tuple[float, float, float]:
         """Evaluate GRPO policy over val_data."""
         return 0.8, 2.22, 1.0
 
     async def save_checkpoint(self, step: int, version_tag: str) -> Path:
         """Persist GRPO checkpoint to `vadi-pehn-sibling-grpo-v<version_tag>.bin`."""
-        ckpt_path = self.config.output_dir / f"vadi-pehn-sibling-grpo-v{version_tag}.bin"
+        ckpt_path = (
+            self.config.output_dir / f"vadi-pehn-sibling-grpo-v{version_tag}.bin"
+        )
         with open(ckpt_path, "w", encoding="utf-8") as f:
-            f.write(f"VADI_PEHN_GRPO_CHECKPOINT_V1\nmodel: {self.config.model_name}\nstep: {step}\nbeta: {self.config.beta_kl_penalty}\n")
+            f.write(
+                f"VADI_PEHN_GRPO_CHECKPOINT_V1\nmodel: {self.config.model_name}\nstep: {step}\nbeta: {self.config.beta_kl_penalty}\n"
+            )
         return ckpt_path
 
 
@@ -112,7 +127,9 @@ class MockGRPOTrainer(TrainerClient):
         self.config = config or GRPOConfig()
         self.steps_executed: list[int] = []
 
-    async def train_step(self, step: int, batch_data: list[dict[str, Any]]) -> TrainingStepResult:
+    async def train_step(
+        self, step: int, batch_data: list[dict[str, Any]]
+    ) -> TrainingStepResult:
         self.steps_executed.append(step)
         return TrainingStepResult(
             step=step,
@@ -124,7 +141,9 @@ class MockGRPOTrainer(TrainerClient):
             optimizer_used=self.config.optimizer.value,
         )
 
-    async def evaluate_validation(self, val_data: list[dict[str, Any]]) -> tuple[float, float, float]:
+    async def evaluate_validation(
+        self, val_data: list[dict[str, Any]]
+    ) -> tuple[float, float, float]:
         return 0.48, 1.61, 1.0
 
     async def save_checkpoint(self, step: int, version_tag: str) -> Path:

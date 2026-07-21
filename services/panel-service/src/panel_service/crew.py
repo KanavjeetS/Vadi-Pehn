@@ -4,6 +4,7 @@ Implements: PRD §5.1 (3-agent panel + fact validation agent turn),
            PRD §4 (Relational Safety: sibling-framed persona handoffs),
            PRD §6.5 (Voice TTS handoffs for panel personas).
 """
+
 from __future__ import annotations
 
 import base64
@@ -36,10 +37,14 @@ class CrewAIPanelRunner(CrewAIRunner):
 
     def _init_jinja_env(self) -> None:
         personas_dir = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "orchestration", "personas")
+            os.path.join(
+                os.path.dirname(__file__), "..", "..", "..", "orchestration", "personas"
+            )
         )
         if os.path.exists(personas_dir):
-            self.jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader(personas_dir))
+            self.jinja_env = jinja2.Environment(
+                loader=jinja2.FileSystemLoader(personas_dir)
+            )
         else:
             self.jinja_env = None
 
@@ -84,8 +89,10 @@ class CrewAIPanelRunner(CrewAIRunner):
         )
 
         # 2. Synthesize guidance using versioned Jinja2 prompt if available
-        custom_prompt = self._render_persona_prompt(lead_persona.code.lower(), request.age_band)
-        
+        custom_prompt = self._render_persona_prompt(
+            lead_persona.code.lower(), request.age_band
+        )
+
         persona_titles = ", ".join([f"{p.title} ({p.domain})" for p in personas])
         guidance_claims = [
             f"As a panel comprising {persona_titles}, we recommend exploring hands-on projects.",
@@ -94,12 +101,16 @@ class CrewAIPanelRunner(CrewAIRunner):
         ]
 
         if custom_prompt:
-            guidance_claims[0] = f"{lead_persona.title}: {custom_prompt.splitlines()[0]}"
+            guidance_claims[0] = (
+                f"{lead_persona.title}: {custom_prompt.splitlines()[0]}"
+            )
 
         # 3. Fact Validation Agent runs after career suggestion agents
-        validated_claims, fact_check_passed = await self.fact_validator.validate_career_claims(
-            claims=guidance_claims,
-            approved_references=[p.approved_fact_source_ref for p in personas],
+        validated_claims, fact_check_passed = (
+            await self.fact_validator.validate_career_claims(
+                claims=guidance_claims,
+                approved_references=[p.approved_fact_source_ref for p in personas],
+            )
         )
 
         synthesized_text = " ".join(validated_claims)
@@ -108,7 +119,9 @@ class CrewAIPanelRunner(CrewAIRunner):
         audio_b64: str | None = None
         if self.tts_service:
             try:
-                audio_bytes = await self.tts_service.synthesize(synthesized_text, language="hi")
+                audio_bytes = await self.tts_service.synthesize(
+                    synthesized_text, language="hi"
+                )
                 if audio_bytes:
                     audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
             except Exception:

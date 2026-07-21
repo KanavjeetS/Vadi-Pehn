@@ -4,6 +4,7 @@ Implements: PRD §4.1, SD §3.2, implementation_plan.md §4A.
 Preserves natural sentence boundaries (`.`, `?`, `!`, `\n`) rather than arbitrary token slicing
 to maintain semantic completeness for child dialogue and tutoring contexts.
 """
+
 from __future__ import annotations
 
 import re
@@ -32,7 +33,9 @@ class SentenceBoundaryChunker:
             return []
 
         cleaned = text.strip()
-        raw_sentences = [s.strip() for s in self._split_pattern.split(cleaned) if s.strip()]
+        raw_sentences = [
+            s.strip() for s in self._split_pattern.split(cleaned) if s.strip()
+        ]
         if not raw_sentences:
             return []
 
@@ -44,11 +47,16 @@ class SentenceBoundaryChunker:
             sentence_len = len(sentence) + (1 if current_sentences else 0)
 
             # If adding this sentence would exceed limit and we already have sentences in chunk
-            if current_sentences and (current_len + sentence_len > self.max_chunk_chars):
+            if current_sentences and (
+                current_len + sentence_len > self.max_chunk_chars
+            ):
                 chunks.append(" ".join(current_sentences))
                 # Keep overlap sentences for next chunk
-                if self.overlap_sentences > 0 and len(current_sentences) >= self.overlap_sentences:
-                    current_sentences = current_sentences[-self.overlap_sentences:]
+                if (
+                    self.overlap_sentences > 0
+                    and len(current_sentences) >= self.overlap_sentences
+                ):
+                    current_sentences = current_sentences[-self.overlap_sentences :]
                     current_len = sum(len(s) + 1 for s in current_sentences) - 1
                 else:
                     current_sentences = []

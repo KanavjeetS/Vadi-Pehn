@@ -2,11 +2,12 @@
 Mock asyncpg pool and connection classes for unit tests.
 Extends the patterns used in test_store.py to support custom queries, fetches, and returns.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Callable
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 
 class MockAsyncpgTransaction:
@@ -49,15 +50,17 @@ class MockAsyncpgConnection:
             return self.fetch_callback(query, args)
         if self.fetch_returns:
             return self.fetch_returns.pop(0)
-        return [{
-            "id": uuid4(),
-            "tenant_id": uuid4(),
-            "learner_id": uuid4(),
-            "content": "Mock memory text",
-            "metadata": "{}",
-            "created_at": datetime.now(timezone.utc),
-            "similarity_score": 0.95
-        }]
+        return [
+            {
+                "id": uuid4(),
+                "tenant_id": uuid4(),
+                "learner_id": uuid4(),
+                "content": "Mock memory text",
+                "metadata": "{}",
+                "created_at": datetime.now(timezone.utc),
+                "similarity_score": 0.95,
+            }
+        ]
 
 
 class MockAsyncpgPoolContext:

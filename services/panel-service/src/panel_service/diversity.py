@@ -2,15 +2,15 @@
 Panel Selection, Diversity Routing, and Relationship Bandwidth Enforcement.
 Implements: PRD §5.1 (3-agent panel composition, top-2 + 1 diversity, relationship bandwidth limit).
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
 from panel_service.abstractions import PanelSelectionEngine
 from panel_service.models import ProfessionalPersona, RelationshipRecord
-
 
 # Pre-defined catalog of 8 domain expert personas (PRD §5.1, SD §4.4 MoE taxonomy)
 DEFAULT_PERSONA_CATALOG: list[ProfessionalPersona] = [
@@ -145,7 +145,9 @@ class PanelSelector(PanelSelectionEngine):
         If no clean taxonomy match exists, returns ([], "no_match_fallback") and queues for curation.
         """
         if not top_interests:
-            self.curation_queue.append({"learner_id": str(learner_id), "reason": "empty_interests"})
+            self.curation_queue.append(
+                {"learner_id": str(learner_id), "reason": "empty_interests"}
+            )
             return [], "no_match_fallback"
 
         # 1. Match interests against catalog taxonomy codes (word boundary / exact match)
@@ -153,20 +155,24 @@ class PanelSelector(PanelSelectionEngine):
         for interest in top_interests:
             interest_upper = interest.upper().strip()
             for p in self.catalog:
-                if (p.profession_taxonomy_code == interest_upper or
-                    p.domain.upper() == interest_upper or
-                    interest_upper in p.title.upper() or
-                    p.profession_taxonomy_code in interest_upper):
+                if (
+                    p.profession_taxonomy_code == interest_upper
+                    or p.domain.upper() == interest_upper
+                    or interest_upper in p.title.upper()
+                    or p.profession_taxonomy_code in interest_upper
+                ):
                     if p not in matched_personas:
                         matched_personas.append(p)
 
         if not matched_personas:
             # NO CLEAN TAXONOMY MATCH: Queue for curation review, DO NOT fabricate match (PRD §5.1)
-            self.curation_queue.append({
-                "learner_id": str(learner_id),
-                "interests": top_interests,
-                "reason": "no_taxonomy_match"
-            })
+            self.curation_queue.append(
+                {
+                    "learner_id": str(learner_id),
+                    "interests": top_interests,
+                    "reason": "no_taxonomy_match",
+                }
+            )
             return [], "no_match_fallback"
 
         # 2. Select top matched personas (up to 2) and fill up to 3 with distinct diversity personas

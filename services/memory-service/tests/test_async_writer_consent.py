@@ -3,7 +3,9 @@ Unit tests for AsyncMemoryWriter (`services/memory-service/tests/test_async_writ
 Verifies mandatory consent verification (`PRD §3.2`), 18-month TTL setting (`PRD §3.4`),
 and non-blocking background task scheduling (`PRD §4.2`).
 """
+
 import asyncio
+from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
@@ -19,7 +21,9 @@ class MockConsentChecker(ConsentCheckerClient):
     def __init__(self, is_active: bool = True) -> None:
         self.is_active = is_active
 
-    async def check_memory_write_consent(self, tenant_id: UUID, learner_id: UUID) -> bool:
+    async def check_memory_write_consent(
+        self, tenant_id: UUID, learner_id: UUID
+    ) -> bool:
         return self.is_active
 
 
@@ -52,7 +56,10 @@ async def test_writer_inserts_chunks_with_18_month_ttl_when_consent_active():
     mock_pool = MockAsyncpgPool(mock_conn)
 
     # Simulate two inserted chunk IDs
-    mock_conn.fetchval_returns = [UUID("10000000-0000-0000-0000-000000000001"), UUID("10000000-0000-0000-0000-000000000002")]
+    mock_conn.fetchval_returns = [
+        UUID("10000000-0000-0000-0000-000000000001"),
+        UUID("10000000-0000-0000-0000-000000000002"),
+    ]
 
     checker = MockConsentChecker(is_active=True)
     writer = AsyncMemoryWriter(
@@ -90,7 +97,9 @@ async def test_writer_async_background_task_scheduling():
     mock_pool = MockAsyncpgPool(mock_conn)
     mock_conn.fetchval_returns = [UUID("10000000-0000-0000-0000-000000000001")]
 
-    writer = AsyncMemoryWriter(pool=mock_pool, consent_checker=MockConsentChecker(is_active=True))
+    writer = AsyncMemoryWriter(
+        pool=mock_pool, consent_checker=MockConsentChecker(is_active=True)
+    )
 
     task = writer.write_memory_async(
         tenant_id=UUID("11111111-1111-1111-1111-111111111111"),

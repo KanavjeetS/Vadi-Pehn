@@ -3,11 +3,12 @@ Abstract base classes and data models for Vadi-Pehn Multi-Hybrid RAG Pipeline.
 Implements: AGENTS.md Part 3 (Abstract-first requirement),
 PRD §4 (Memory & Context), SD §3.2 & §5.1 (Hybrid Retrieval, RRF, Reranking).
 """
+
 from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from uuid import UUID
 @dataclass
 class ScoredMemoryItem:
     """Individual memory item with detailed dense, sparse, RRF, and rerank scores."""
+
     memory_id: UUID | str
     tenant_id: UUID
     learner_id: UUID
@@ -32,6 +34,7 @@ class ScoredMemoryItem:
 @dataclass
 class HybridRetrievalQuery:
     """Configuration and query parameters for multi-hybrid RAG retrieval."""
+
     tenant_id: UUID
     learner_id: UUID
     query_text: str
@@ -47,6 +50,7 @@ class HybridRetrievalQuery:
 @dataclass
 class ContextualTurnSummary:
     """Context window combining recent dialogue turns, retrieved memories, and rapport status."""
+
     session_history: list[dict[str, str]]
     retrieved_memories: list[ScoredMemoryItem]
     rapport_score: float
@@ -91,6 +95,8 @@ class ConsentCheckerClient(abc.ABC):
     """
 
     @abc.abstractmethod
-    async def check_memory_write_consent(self, tenant_id: UUID, learner_id: UUID) -> bool:
+    async def check_memory_write_consent(
+        self, tenant_id: UUID, learner_id: UUID
+    ) -> bool:
         """Return True if learner has active consent for memory_storage, False if revoked/absent."""
         ...

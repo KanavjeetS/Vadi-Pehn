@@ -5,6 +5,18 @@
 let currentTurnCount = 1;
 const MAX_TURNS = 20;
 
+function authenticatedContext() {
+    const context = {
+        token: sessionStorage.getItem('vadi_access_token'),
+        tenantId: sessionStorage.getItem('vadi_tenant_id'),
+        learnerId: sessionStorage.getItem('vadi_learner_id')
+    };
+    if (!context.token || !context.tenantId || !context.learnerId) {
+        throw new Error('Sign in and select a learner before starting a turn.');
+    }
+    return context;
+}
+
 function switchTab(tabId) {
     document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -36,16 +48,17 @@ async function handleSendTurn(event) {
     const language = document.getElementById('lang-select').value;
 
     try {
+        const context = authenticatedContext();
         const response = await fetch('/api/v1/turn', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer test_desktop_token_123'
+                'Authorization': `Bearer ${context.token}`
             },
             body: JSON.stringify({
-                session_id: 'sess_desktop_001',
-                tenant_id: '00000000-0000-0000-0000-000000000001',
-                learner_id: '00000000-0000-0000-0000-000000000002',
+                session_id: crypto.randomUUID(),
+                tenant_id: context.tenantId,
+                learner_id: context.learnerId,
                 age_band: ageBand,
                 message_text: messageText,
                 language: language
@@ -68,14 +81,16 @@ async function handleSendTurn(event) {
             appendMessage(replyText, 'assistant', data.safety_verdict || 'safe');
         } else {
             // Fallback for local offline simulation
-            handleLocalTurnSimulation(messageText);
+            throw new Error(`Turn failed (${response.status})`);
         }
     } catch (err) {
-        handleLocalTurnSimulation(messageText);
+        appendMessage(`Unable to reach Vadi: ${err.message}`, 'system', 'error');
     }
 }
 
 function handleLocalTurnSimulation(messageText) {
+    throw new Error('Local turn simulation has been removed; live API required.');
+    /*
     currentTurnCount++;
     document.getElementById('turn-count').innerText = currentTurnCount;
 
@@ -93,7 +108,7 @@ function handleLocalTurnSimulation(messageText) {
         reply += " (jaise maine bataya, main ek AI mentor hoon, asli brother nahi, par tumhari madad karke mujhe bahut khushi hoti hai)";
     }
 
-    appendMessage(reply, 'assistant', 'safe');
+    appendMessage(reply, 'assistant', 'safe'); */
 }
 
 function appendMessage(text, role, verdict = 'safe') {
@@ -135,22 +150,24 @@ function triggerVoiceTurn() {
 
 async function toggleConsent(consentType, isGranted) {
     try {
+        const token = sessionStorage.getItem('vadi_access_token');
+        if (!token) throw new Error('Sign in before changing consent');
         await fetch('/api/v1/guardian/consent', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer test_desktop_token_123'
+                'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-                tenant_id: '00000000-0000-0000-0000-000000000001',
-                learner_id: '00000000-0000-0000-0000-000000000002',
-                guardian_id: '00000000-0000-0000-0000-000000000003',
+                tenant_id: sessionStorage.getItem('vadi_tenant_id'),
+                learner_id: sessionStorage.getItem('vadi_learner_id'),
+                guardian_id: sessionStorage.getItem('vadi_guardian_id'),
                 consent_type: consentType,
                 granted: isGranted
             })
         });
     } catch (e) {
-        console.log("Consent toggle updated locally:", consentType, isGranted);
+        console.error('Consent update failed:', e);
     }
 }
 
@@ -160,26 +177,28 @@ async function simulateFileUpload() {
     const ocrStep = document.getElementById('step-ocr');
     const ocrConfText = document.getElementById('ocr-confidence-text');
 
-    let fileName = "report_card_synthetic.png";
-    let fileData = "synthetic_image_bytes";
-    let expectedGrade = "A";
-
-    if (mode === "low_conf") {
-        fileData = "low_conf_image_data";
-    } else if (mode === "grade_mismatch") {
-        expectedGrade = "A";
+    const fileInput = document.getElementById('document-file-input');
+    const file = fileInput?.files?.[0];
+    const token = sessionStorage.getItem('vadi_access_token');
+    if (!file || !token) {
+        ocrConfText.innerText = 'Sign in and choose a document before uploading.';
+        return;
     }
+    const fileData = await fileToBase64(file);
 
     try {
-        const res = await fetch('/internal/v1/documents/upload', {
+        const res = await fetch('/api/v1/documents/upload', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({
-                tenant_id: '00000000-0000-0000-0000-000000000001',
-                learner_id: '00000000-0000-0000-0000-000000000002',
-                file_name: fileName,
+                tenant_id: sessionStorage.getItem('vadi_tenant_id'),
+                learner_id: sessionStorage.getItem('vadi_learner_id'),
+                file_name: file.name,
                 file_bytes_base64: fileData,
-                in_app_expected_grade: expectedGrade
+                in_app_expected_grade: document.getElementById('expected-grade')?.value || null
             })
         });
 
@@ -192,52 +211,21 @@ async function simulateFileUpload() {
                 updateDiscrepancyTable(data);
             }
         } else {
-            simulateLocalDocumentOutput(mode);
+            throw new Error(`Upload failed (${res.status})`);
         }
     } catch (e) {
-        simulateLocalDocumentOutput(mode);
+        ocrConfText.innerText = `Upload failed: ${e.message}`;
+        console.error(e);
     }
 }
 
-function simulateLocalDocumentOutput(mode) {
-    const jsonView = document.getElementById('extracted-json-view');
-    const ocrConfText = document.getElementById('ocr-confidence-text');
-
-    if (mode === "low_conf") {
-        const out = {
-            document_id: "doc_synth_99",
-            redaction_verified: true,
-            ocr_confidence: 0.72,
-            requires_discrepancy_review: true,
-            discrepancy_reasons: ["OCR confidence (0.72) below minimum threshold of 0.85"]
-        };
-        jsonView.innerText = JSON.stringify(out, null, 2);
-        ocrConfText.innerText = "Confidence: 0.72 | Routed to Discrepancy Queue";
-        updateDiscrepancyTable(out);
-    } else if (mode === "grade_mismatch") {
-        const out = {
-            document_id: "doc_synth_88",
-            redaction_verified: true,
-            ocr_confidence: 0.92,
-            requires_discrepancy_review: true,
-            discrepancy_reasons: ["Grade mismatch: Extracted 'B' vs Expected 'A'"]
-        };
-        jsonView.innerText = JSON.stringify(out, null, 2);
-        ocrConfText.innerText = "Confidence: 0.92 | Grade Mismatch Flagged";
-        updateDiscrepancyTable(out);
-    } else {
-        const out = {
-            document_id: "doc_synth_01",
-            redaction_verified: true,
-            ocr_confidence: 0.94,
-            student_name: "Learner Alex",
-            overall_grade: "A",
-            subjects: { "Math": "95", "Science": "92" },
-            requires_discrepancy_review: false
-        };
-        jsonView.innerText = JSON.stringify(out, null, 2);
-        ocrConfText.innerText = "Confidence: 0.94 | VERIFIED PASS";
-    }
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',', 2)[1] || '');
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 }
 
 function updateDiscrepancyTable(data) {
@@ -245,7 +233,7 @@ function updateDiscrepancyTable(data) {
     tbody.innerHTML = `
         <tr>
             <td>1</td>
-            <td><code>${data.document_id || 'doc_synth_99'}</code></td>
+            <td><code>${data.document_id || 'unassigned'}</code></td>
             <td>overall_grade</td>
             <td>B</td>
             <td>A</td>

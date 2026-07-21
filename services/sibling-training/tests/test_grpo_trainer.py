@@ -2,6 +2,7 @@
 Unit tests for GRPO policy alignment trainer verifying group advantage normalization,
 reward shaping integration, and checkpoint persistence.
 """
+
 from __future__ import annotations
 
 import os
@@ -9,10 +10,11 @@ import sys
 from pathlib import Path
 
 import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from sibling_training.abstractions import GRPOConfig
-from sibling_training.grpo_trainer import MockGRPOTrainer, NanochatGRPOTrainer
+from sibling_training.grpo_trainer import NanochatGRPOTrainer
 from sibling_training.reward import MockRewardModel
 
 

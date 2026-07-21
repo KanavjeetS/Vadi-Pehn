@@ -1,13 +1,49 @@
 version: "3.8"
 
+networks:
+  vadi-internal:
+    driver: bridge
+  vadi-llm-backend:
+    driver: bridge
+    internal: true
+
 services:
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: services/api-gateway/Dockerfile
+    ports:
+      - "8010:8000"
+    networks:
+      - vadi-internal
+    environment:
+      ENVIRONMENT: pilot
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET}
+      MEMORY_DB_PASSWORD: ${MEMORY_DB_PASSWORD:?set MEMORY_DB_PASSWORD}
+      GOVERNANCE_DB_PASSWORD: ${GOVERNANCE_DB_PASSWORD:?set GOVERNANCE_DB_PASSWORD}
+      MEMORY_DB_HOST: postgres-primary
+      ORCHESTRATION_URL: http://orchestration:8000
+      VOICE_GATEWAY_URL: http://voice-gateway:8000
+      GOVERNANCE_SERVICE_URL: http://governance-service:8000
+      INGESTION_SERVICE_URL: http://ingestion-service:8000
+    depends_on:
+      - orchestration
+      - voice-gateway
+      - governance-service
+
   # ── GPU 0 Allocation: Main Sibling LLM ──
   vllm-main:
     image: vllm/vllm-openai:latest
+    command: ["--model", "${VLLM_MAIN_MODEL:?set VLLM_MAIN_MODEL}", "--served-model-name", "${VLLM_MAIN_MODEL:?set VLLM_MAIN_MODEL}", "--host", "0.0.0.0"]
     environment:
       - CUDA_VISIBLE_DEVICES=0
-    ports:
-      - "8001:8000"
+    expose:
+      - "8000"
+    networks:
+      - vadi-llm-backend
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -17,10 +53,13 @@ services:
   # ── GPU 1 Allocation: Classifier + OCR + TTS ──
   vllm-classifier:
     image: vllm/vllm-openai:latest
+    command: ["--model", "${VLLM_CLASSIFIER_MODEL:?set VLLM_CLASSIFIER_MODEL}", "--served-model-name", "${VLLM_CLASSIFIER_MODEL:?set VLLM_CLASSIFIER_MODEL}", "--host", "0.0.0.0"]
     environment:
       - CUDA_VISIBLE_DEVICES=1
-    ports:
-      - "8002:8000"
+    expose:
+      - "8000"
+    networks:
+      - vadi-llm-backend
 
   kokoro-tts:
     image: kokoro-fastapi:latest
@@ -39,52 +78,160 @@ services:
   # ── Safety Proxy (Mandatory Network Pre-Filter) ──
   safety-proxy:
     build:
-      context: ../services/safety-proxy
+      context: ..
+      dockerfile: services/safety-proxy/Dockerfile
     ports:
       - "8080:8080"
     depends_on:
       - vllm-classifier
+    networks:
+      - vadi-internal
+      - vadi-llm-backend
+    environment:
+      SAFETY_PROXY_ALLOW_DEV_BYPASS: "false"
+      ENVIRONMENT: pilot
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET}
+      VLLM_CLASSIFIER_URL: http://vllm-classifier:8000
+      VLLM_MAIN_URL: http://vllm-main:8000
+
+  livekit:
+    image: livekit/livekit-server:latest
+    command: ["--bind", "0.0.0.0"]
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET}"
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+    networks:
+      - vadi-internal
 
   # ── Orchestration Service (LangGraph Spine) ──
   orchestration:
     build:
-      context: ../services/orchestration
+      context: ..
+      dockerfile: services/orchestration/Dockerfile
     ports:
       - "8000:8000"
     depends_on:
       - safety-proxy
+      - postgres-primary
+      - governance-service
+    networks:
+      - vadi-internal
+    environment:
+      ENVIRONMENT: pilot
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+      MEMORY_DB_HOST: postgres-primary
+      MEMORY_DB_PASSWORD: ${MEMORY_DB_PASSWORD:?set MEMORY_DB_PASSWORD}
+      MEMORY_EMBEDDING_URL: ${MEMORY_EMBEDDING_URL:?set MEMORY_EMBEDDING_URL}
+      MEMORY_EMBEDDING_MODEL: ${MEMORY_EMBEDDING_MODEL:-nomic-embed-text}
+      SAFETY_PROXY_URL: http://safety-proxy:8080
+      GOVERNANCE_SERVICE_URL: http://governance-service:8000
 
   # ── Voice Gateway (WebRTC LiveKit SFU) ──
   voice-gateway:
     build:
-      context: ../services/voice-gateway
-    network_mode: host
+      context: ..
+      dockerfile: services/voice-gateway/Dockerfile
+    ports:
+      - "8009:8000"
+    networks:
+      - vadi-internal
     depends_on:
       - orchestration
       - kokoro-tts
+      - livekit
+    environment:
+      ENVIRONMENT: pilot
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+      ORCHESTRATION_URL: http://orchestration:8000
+      SAFETY_PROXY_URL: http://safety-proxy:8080
+      LIVEKIT_URL: ws://livekit:7880
 
   # ── Multi-Agent Career Panel Service ──
   panel-service:
     build:
-      context: ../services/panel-service
+      context: ..
+      dockerfile: services/panel-service/Dockerfile
     ports:
       - "8006:8000"
+    networks:
+      - vadi-internal
+    environment:
+      ENVIRONMENT: pilot
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+
+  ingestion-service:
+    build:
+      context: ..
+      dockerfile: services/ingestion-service/Dockerfile
+    ports:
+      - "8011:8000"
+    networks:
+      - vadi-internal
+    environment:
+      ENVIRONMENT: pilot
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+      QWEN_OCR_URL: http://olmocr-worker:8000
+    depends_on:
+      - olmocr-worker
 
   # ── Governance Service ──
   governance-service:
     build:
-      context: ../services/governance-service
+      context: ..
+      dockerfile: services/governance-service/Dockerfile
     ports:
       - "8007:8000"
     depends_on:
       - postgres-governance
+    environment:
+      ENVIRONMENT: pilot
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+      GOVERNANCE_DB_HOST: postgres-governance
+      GOVERNANCE_DB_PORT: "5432"
+      GOVERNANCE_DB_PASSWORD: ${GOVERNANCE_DB_PASSWORD:?set GOVERNANCE_DB_PASSWORD}
+      ONCALL_SMS_WEBHOOK_URL: ""
 
   # ── Guardian Dashboard BFF ──
   dashboard-bff:
     build:
-      context: ../services/dashboard-bff
+      context: ..
+      dockerfile: services/dashboard-bff/Dockerfile
     ports:
       - "8008:8000"
+    networks:
+      - vadi-internal
+    environment:
+      ENVIRONMENT: pilot
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET}
+      MEMORY_DB_HOST: postgres-primary
+      MEMORY_DB_PASSWORD: ${MEMORY_DB_PASSWORD:?set MEMORY_DB_PASSWORD}
+      GOVERNANCE_SERVICE_URL: http://governance-service:8000
+    depends_on:
+      - postgres-primary
+      - governance-service
 
   # ── Physically Separate Postgres Instances (Architecture Non-Negotiable) ──
   postgres-primary:
@@ -94,7 +241,11 @@ services:
     environment:
       POSTGRES_DB: vadi_memory
       POSTGRES_USER: vadi_app
-      POSTGRES_PASSWORD: secret
+      POSTGRES_PASSWORD: ${MEMORY_DB_PASSWORD:?set MEMORY_DB_PASSWORD}
+    networks:
+      - vadi-internal
+    volumes:
+      - ../db/migrations:/docker-entrypoint-initdb.d:ro
 
   postgres-governance:
     image: postgres:16-alpine
@@ -103,7 +254,11 @@ services:
     environment:
       POSTGRES_DB: vadi_governance
       POSTGRES_USER: vadi_gov_app
-      POSTGRES_PASSWORD: secret
+      POSTGRES_PASSWORD: ${GOVERNANCE_DB_PASSWORD:?set GOVERNANCE_DB_PASSWORD}
+    networks:
+      - vadi-internal
+    volumes:
+      - ../db/migrations/governance:/docker-entrypoint-initdb.d:ro
 
   minio:
     image: minio/minio:latest
@@ -112,8 +267,8 @@ services:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?set MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY}
 
   redis:
     image: redis:7-alpine

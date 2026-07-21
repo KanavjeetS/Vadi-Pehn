@@ -2,9 +2,9 @@
 Data transfer objects and models for the Voice Gateway.
 Implements: coding-standards §3 (full type hints on dataclass/pydantic models).
 """
+
 from __future__ import annotations
 
-from typing import Any
 from uuid import UUID
 from pydantic import BaseModel, Field
 
@@ -36,7 +36,9 @@ class VoiceTurnRequest(BaseModel):
     learner_id: UUID
     age_band: int = Field(default=2, ge=1, le=3)
     audio_data_base64: str | None = None
-    text_fallback: str | None = None  # in case client network doesn't support streaming audio
+    text_fallback: str | None = (
+        None  # in case client network doesn't support streaming audio
+    )
     language: str = "en"
 
 

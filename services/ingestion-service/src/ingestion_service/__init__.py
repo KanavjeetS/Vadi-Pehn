@@ -1,6 +1,7 @@
 """
 Ingestion Service package.
 """
+
 from .service import (
     DocumentIngestionService,
     DocumentUploadRequest,

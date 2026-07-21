@@ -3,11 +3,11 @@ Text-to-Speech (TTS) services for Vadi-Pehn.
 Implements: Abstract-first pattern.
 Provides Kokoro-82M TTS and Piper TTS fallback.
 """
+
 from __future__ import annotations
 
 import httpx
 import subprocess
-from typing import Any
 from voice_gateway.abstractions import TTSService
 
 
@@ -46,7 +46,9 @@ class PiperTTSService(TTSService):
     Runs Piper command-line or local API to synthesize Punjabi/other fallback audios.
     """
 
-    def __init__(self, piper_path: str = "piper", model_path: str = "models/pa_in.onnx") -> None:
+    def __init__(
+        self, piper_path: str = "piper", model_path: str = "models/pa_in.onnx"
+    ) -> None:
         self.piper_path = piper_path
         self.model_path = model_path
 
@@ -56,22 +58,20 @@ class PiperTTSService(TTSService):
         """
         try:
             # We call Piper as a subprocess piping text in and reading WAV bytes out
-            cmd = [
-                self.piper_path,
-                "--model", self.model_path,
-                "--output-raw"
-            ]
+            cmd = [self.piper_path, "--model", self.model_path, "--output-raw"]
             process = subprocess.Popen(
                 cmd,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
             )
-            stdout, stderr = process.communicate(input=text.encode("utf-8"), timeout=3.0)
+            stdout, stderr = process.communicate(
+                input=text.encode("utf-8"), timeout=3.0
+            )
             if process.returncode != 0:
                 raise RuntimeError(f"Piper failed: {stderr.decode('utf-8')}")
             return stdout
-        except Exception as e:
+        except Exception:
             # Safe degraded fallback: return empty/error audio log rather than crashing
             return b"ERR_PIPER_TTS_FAILED"
 
@@ -83,9 +83,7 @@ class KokoroTTSService(TTSService):
     """
 
     def __init__(
-        self,
-        kokoro_url: str,
-        fallback_service: PiperTTSService | None = None
+        self, kokoro_url: str, fallback_service: PiperTTSService | None = None
     ) -> None:
         self.kokoro_url = kokoro_url.rstrip("/")
         self.fallback_service = fallback_service or PiperTTSService()
@@ -106,7 +104,7 @@ class KokoroTTSService(TTSService):
                     json={
                         "input": text,
                         "voice": "en_us_male" if language == "en" else "hi_female",
-                        "response_format": "wav"
+                        "response_format": "wav",
                     },
                     timeout=2.0,  # Enforce sub-500ms budget for first chunks
                 )

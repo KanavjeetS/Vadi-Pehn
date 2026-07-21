@@ -10,6 +10,7 @@ Verifies:
   7. Mandatory PII scrubbing on OCR text ingestion
   8. End-to-end panel execution workflow
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
@@ -49,7 +50,7 @@ async def test_top_2_plus_diversity_selection(panel_selector: PanelSelector) -> 
     """Verifies selection of top-2 interest matches + 1 diversity persona."""
     learner_id = uuid4()
     top_interests = ["Technology", "Robotics"]
-    
+
     personas, status = await panel_selector.select_panel_personas(
         learner_id=learner_id,
         top_interests=top_interests,
@@ -68,7 +69,7 @@ async def test_no_match_fallback(panel_selector: PanelSelector) -> None:
     """PRD §5.1 ASSERTION: Returns no_match_fallback when no taxonomy match exists; NEVER fabricates a match."""
     learner_id = uuid4()
     top_interests = ["UNMATCHABLE_UNKNOWN_TOPIC_12345"]
-    
+
     personas, status = await panel_selector.select_panel_personas(
         learner_id=learner_id,
         top_interests=top_interests,
@@ -85,7 +86,7 @@ async def test_no_match_fallback(panel_selector: PanelSelector) -> None:
 async def test_relationship_bandwidth_limit(panel_selector: PanelSelector) -> None:
     """PRD §5.1 ASSERTION: Max 3 active relationships allowed per learner."""
     learner_id = uuid4()
-    
+
     allowed_under_limit = await panel_selector.check_relationship_bandwidth(
         learner_id=learner_id, active_relationships_count=2
     )
@@ -116,7 +117,9 @@ async def test_45_day_inactive_auto_lapse(panel_selector: PanelSelector) -> None
         last_interaction_at=now - timedelta(days=50),  # > 45 days ago!
     )
 
-    updated = panel_selector.evaluate_relationship_lapses([active_rel, lapsed_rel], lapse_days=45)
+    updated = panel_selector.evaluate_relationship_lapses(
+        [active_rel, lapsed_rel], lapse_days=45
+    )
 
     assert updated[0].is_active
     assert not updated[1].is_active
@@ -124,7 +127,9 @@ async def test_45_day_inactive_auto_lapse(panel_selector: PanelSelector) -> None
 
 
 @pytest.mark.asyncio
-async def test_fact_validator_filters_hallucinations(fact_validator: FactValidator) -> None:
+async def test_fact_validator_filters_hallucinations(
+    fact_validator: FactValidator,
+) -> None:
     """PRD §5.1 ASSERTION: Fact Validation Agent filters invalid/hallucinated career claims."""
     claims = [
         "Software engineering requires logical thinking and practice.",

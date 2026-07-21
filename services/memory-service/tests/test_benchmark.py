@@ -3,14 +3,19 @@ Unit tests for HybridRetrievalBenchmark (`services/memory-service/tests/test_ben
 Verifies that Multi-Hybrid RAG (Dense + Sparse BM25 + RRF + Cross-Encoder Rerank)
 beats Pure Dense retrieval on child-domain exact keyword/entity recall.
 """
+
 from datetime import datetime, timezone
 from uuid import UUID
+import json
 
 import pytest
 
 from mock_db import MockAsyncpgConnection, MockAsyncpgPool
-from memory_service.abstractions import ScoredMemoryItem
-from memory_service.benchmark import BenchmarkQuerySpec, HybridRetrievalBenchmark
+from memory_service.benchmark import (
+    BenchmarkComparisonResult,
+    BenchmarkQuerySpec,
+    HybridRetrievalBenchmark,
+)
 from memory_service.embeddings import MockEmbeddingClient, MockRerankerClient
 from memory_service.retrieval import HybridRetrievalEngine
 
@@ -78,3 +83,21 @@ async def test_hybrid_benchmark_shows_recall_superiority_over_pure_dense():
     assert result.dense_recall_at_k == 0.0
     assert result.hybrid_recall_at_k == 1.0
     assert result.hybrid_wins is True
+
+
+def test_benchmark_report_is_explicitly_labelled(tmp_path):
+    result = BenchmarkComparisonResult(
+        total_queries=1,
+        dense_hits=0,
+        hybrid_hits=1,
+        dense_recall_at_k=0.0,
+        hybrid_recall_at_k=1.0,
+        hybrid_wins=True,
+    )
+
+    output = tmp_path / "memory_benchmark.json"
+    HybridRetrievalBenchmark.write_report(result, output)
+    report = json.loads(output.read_text(encoding="utf-8"))
+
+    assert report["benchmark_type"] == "synthetic_eval"
+    assert report["result"]["hybrid_recall_at_k"] == 1.0

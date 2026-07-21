@@ -2,6 +2,7 @@
 Data Transfer Objects and Pydantic models for the Panel Service.
 Implements: coding-standards §3 (full type hints on dataclass/pydantic models).
 """
+
 from __future__ import annotations
 
 from datetime import datetime

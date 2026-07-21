@@ -5,6 +5,7 @@ Verifies:
   2. Confidence gating (0.85 threshold) & discrepancy log routing (PRD §9).
   3. Governance consent check before ingestion.
 """
+
 import sys
 import os
 import uuid
@@ -14,8 +15,12 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-from ingestion_service.main import app, service
-from ingestion_service.service import DocumentIngestionService, DocumentUploadRequest, MockGovernanceConsentChecker
+from ingestion_service.main import app
+from ingestion_service.service import (
+    DocumentIngestionService,
+    DocumentUploadRequest,
+    MockGovernanceConsentChecker,
+)
 
 client = TestClient(app)
 

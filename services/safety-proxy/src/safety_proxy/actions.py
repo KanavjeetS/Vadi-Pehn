@@ -8,31 +8,45 @@ Child Safety Non-Negotiable #1, #2:
   or returns an unparseable response, it MUST return `classifier_unavailable`
   and block generation (`blocks_generation = True`). Never default to `safe`.
 """
+
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 from uuid import UUID
 
 import httpx
 
 import sys
 import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 
 from services.abstractions import SafetyVerdict, SafetyVerdictCode
 from services.config import settings
 
-
 # Local keyword pre-filter patterns for ultra-fast fail-fast check before network LLM call
 SELF_HARM_KEYWORDS = {
-    "kill myself", "suicide", "end my life", "want to die", "hurt myself", "cut myself"
+    "kill myself",
+    "suicide",
+    "end my life",
+    "want to die",
+    "hurt myself",
+    "cut myself",
 }
 ABUSE_KEYWORDS = {
-    "hit me", "hitting me", "touching me", "secret touch", "hurting me at home", "beat me"
+    "hit me",
+    "hitting me",
+    "touching me",
+    "secret touch",
+    "hurting me at home",
+    "beat me",
 }
 JAILBREAK_KEYWORDS = {
-    "ignore previous instructions", "system prompt", "you are now dan", "bypass rules", "override safety"
+    "ignore previous instructions",
+    "system prompt",
+    "you are now dan",
+    "bypass rules",
+    "override safety",
 }
 
 
@@ -50,15 +64,24 @@ async def classify_input(
 
     # 1. Fast local pre-filter checks
     if any(kw in text_lower for kw in SELF_HARM_KEYWORDS):
-        return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_SELF_HARM, taxonomy_code="S6")
+        return SafetyVerdict(
+            code=SafetyVerdictCode.UNSAFE_SELF_HARM, taxonomy_code="S6"
+        )
     if any(kw in text_lower for kw in ABUSE_KEYWORDS):
         return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_GENERAL, taxonomy_code="S7")
     if any(kw in text_lower for kw in JAILBREAK_KEYWORDS):
         return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_GENERAL, taxonomy_code="S10")
 
-    # If running in development or testing without a live LlamaGuard container and no http_client was passed, return safe
-    if http_client is None and settings.is_dev:
+    # Test-only bypass must be explicitly enabled; never infer safety from environment.
+    if (
+        http_client is None
+        and settings.safety_proxy.allow_dev_bypass
+        and settings.is_dev
+    ):
         return SafetyVerdict(code=SafetyVerdictCode.SAFE, taxonomy_code=None)
+
+    if http_client is None:
+        return SafetyVerdict.unavailable()
 
     # 2. Network classification call against Llama-Guard-3-8B container (with strict 3.0s SLA)
     try:
@@ -81,12 +104,26 @@ async def classify_input(
         if output.startswith("unsafe"):
             lines = output.split("\n")
             code = lines[1].strip() if len(lines) > 1 else "S1"
-            verdict_code = SafetyVerdictCode.UNSAFE_SELF_HARM if code == "S6" else SafetyVerdictCode.UNSAFE_GENERAL
+            verdict_code = (
+                SafetyVerdictCode.UNSAFE_SELF_HARM
+                if code == "S6"
+                else SafetyVerdictCode.UNSAFE_GENERAL
+            )
             return SafetyVerdict(code=verdict_code, taxonomy_code=code)
         return SafetyVerdict(code=SafetyVerdictCode.SAFE, taxonomy_code=None)
-    except (asyncio.TimeoutError, httpx.TimeoutException, httpx.RequestError, KeyError, ValueError, httpx.HTTPStatusError, AttributeError):
+    except (
+        asyncio.TimeoutError,
+        httpx.TimeoutException,
+        httpx.RequestError,
+        KeyError,
+        ValueError,
+        httpx.HTTPStatusError,
+        AttributeError,
+    ):
         # FAIL-CLOSED INVARIANT: On network failure or classifier timeout, block generation!
-        return SafetyVerdict(code=SafetyVerdictCode.CLASSIFIER_UNAVAILABLE, taxonomy_code="ERR_TIMEOUT")
+        return SafetyVerdict(
+            code=SafetyVerdictCode.CLASSIFIER_UNAVAILABLE, taxonomy_code="ERR_TIMEOUT"
+        )
 
 
 async def classify_output(
@@ -102,8 +139,15 @@ async def classify_output(
     if any(kw in text_lower for kw in SELF_HARM_KEYWORDS | ABUSE_KEYWORDS):
         return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_GENERAL)
 
-    if http_client is None and settings.is_dev:
+    if (
+        http_client is None
+        and settings.safety_proxy.allow_dev_bypass
+        and settings.is_dev
+    ):
         return SafetyVerdict(code=SafetyVerdictCode.SAFE)
+
+    if http_client is None:
+        return SafetyVerdict.unavailable()
 
     try:
         response = await asyncio.wait_for(
@@ -125,8 +169,18 @@ async def classify_output(
         if output.startswith("unsafe"):
             return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_GENERAL)
         return SafetyVerdict(code=SafetyVerdictCode.SAFE)
-    except (asyncio.TimeoutError, httpx.TimeoutException, httpx.RequestError, KeyError, ValueError, httpx.HTTPStatusError, AttributeError):
-        return SafetyVerdict(code=SafetyVerdictCode.CLASSIFIER_UNAVAILABLE, taxonomy_code="ERR_TIMEOUT")
+    except (
+        asyncio.TimeoutError,
+        httpx.TimeoutException,
+        httpx.RequestError,
+        KeyError,
+        ValueError,
+        httpx.HTTPStatusError,
+        AttributeError,
+    ):
+        return SafetyVerdict(
+            code=SafetyVerdictCode.CLASSIFIER_UNAVAILABLE, taxonomy_code="ERR_TIMEOUT"
+        )
 
 
 # NeMo Action callbacks wired into child_safety.co flow definitions
@@ -134,9 +188,11 @@ async def check_input_classifier(message_text: str, age_band: int = 2) -> str:
     res = await classify_input(message_text, age_band)
     return res.code.value
 
+
 async def check_jailbreak_classifier(message_text: str) -> bool:
     text_lower = message_text.lower()
     return any(kw in text_lower for kw in JAILBREAK_KEYWORDS)
+
 
 async def check_output_classifier(draft_text: str) -> str:
     res = await classify_output(draft_text)

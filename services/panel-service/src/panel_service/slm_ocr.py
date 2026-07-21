@@ -2,19 +2,22 @@
 SLM (Qwen2-VL-7B) olmOCR Fine-Tune Document Processor.
 Implements: SD §3.5, §7 (OCR confidence threshold gating & discrepancy queue).
 """
+
 from __future__ import annotations
 
 import sys
 import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-sibling_training_src = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "sibling-training", "src"))
+sibling_training_src = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "sibling-training", "src")
+)
 if sibling_training_src not in sys.path:
     sys.path.insert(0, sibling_training_src)
 
-from sibling_training.pii_scrubber import RegexPIIScrubber
-from panel_service.abstractions import SLMOCRService
-from panel_service.models import OCRDocumentRequest, OCRDocumentResponse
+from sibling_training.pii_scrubber import RegexPIIScrubber  # noqa: E402
+from panel_service.abstractions import SLMOCRService  # noqa: E402
+from panel_service.models import OCRDocumentRequest, OCRDocumentResponse  # noqa: E402
 
 
 class QwenSLMOCRService(SLMOCRService):
@@ -36,8 +39,11 @@ class QwenSLMOCRService(SLMOCRService):
         Processes document, computes OCR confidence score, applies PII scrubbing,
         and determines if the document passes the confidence gate.
         """
-        raw_text = request.mock_extracted_text or "Report Card: Mathematics A, Physics B, English A."
-        
+        raw_text = (
+            request.mock_extracted_text
+            or "Report Card: Mathematics A, Physics B, English A."
+        )
+
         # Determine confidence score based on input hints
         confidence = 0.92
         if "LOW_CONFIDENCE" in raw_text or "BLURRY" in raw_text:

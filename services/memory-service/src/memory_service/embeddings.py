@@ -3,11 +3,11 @@ Embedding and Reranking client implementations (`services/memory-service/embeddi
 Implements: PRD §4, SD §3.2, implementation_plan.md §4A & §4B.
 Provides production `NomicEmbeddingClient` / `OpenAIEmbeddingClient` and deterministic `MockEmbeddingClient` / `MockRerankerClient`.
 """
+
 from __future__ import annotations
 
 import hashlib
 import math
-from typing import Any
 
 import httpx
 
@@ -58,7 +58,7 @@ class NomicEmbeddingClient(EmbeddingClient):
                 raise ValueError("Received empty vector from embedding service")
             # If raw dimensions differ, truncate or zero-pad to match required schema
             if len(raw_vec) > self.dimensions:
-                raw_vec = raw_vec[:self.dimensions]
+                raw_vec = raw_vec[: self.dimensions]
             elif len(raw_vec) < self.dimensions:
                 raw_vec.extend([0.0] * (self.dimensions - len(raw_vec)))
             return self._normalize_vector(raw_vec)

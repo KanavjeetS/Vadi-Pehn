@@ -5,11 +5,11 @@ Verifies:
   2. Safety Incident Queue, 15-minute SLA deadline, & 7-year legal hold (PRD §3.3)
   3. SMS Fallback Paging trigger when DB fails (GUARDRAILS G-003)
 """
+
 from __future__ import annotations
 
 import sys
 import os
-from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -91,7 +91,9 @@ async def test_safety_incident_creation_and_sla_deadline() -> None:
     assert delta.total_seconds() == 900.0  # 15 minutes = 900s
 
     # Acknowledge incident
-    ack = await queue.acknowledge_incident(incident_id=inc.incident_id, reviewer_id="reviewer_01")
+    ack = await queue.acknowledge_incident(
+        incident_id=inc.incident_id, reviewer_id="reviewer_01"
+    )
     assert ack.acknowledged_at is not None
     assert ack.reviewer_id == "reviewer_01"
 

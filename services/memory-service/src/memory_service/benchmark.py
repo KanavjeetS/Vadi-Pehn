@@ -4,11 +4,12 @@ Implements: implementation_plan.md §4E Success Criteria.
 Measures Recall@K across child domain queries to verify that Multi-Hybrid RAG
 (Dense HNSW + Sparse BM25 + RRF + Reranking) outperforms pure vector similarity alone.
 """
+
 from __future__ import annotations
 
-import asyncio
+import json
 from dataclasses import dataclass
-from typing import Any
+from pathlib import Path
 from uuid import UUID
 
 import asyncpg
@@ -32,6 +33,17 @@ class BenchmarkComparisonResult:
     hybrid_recall_at_k: float
     hybrid_wins: bool
 
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-safe report without implying production performance."""
+        return {
+            "total_queries": self.total_queries,
+            "dense_hits": self.dense_hits,
+            "hybrid_hits": self.hybrid_hits,
+            "dense_recall_at_k": self.dense_recall_at_k,
+            "hybrid_recall_at_k": self.hybrid_recall_at_k,
+            "hybrid_wins": self.hybrid_wins,
+        }
+
 
 class HybridRetrievalBenchmark:
     """
@@ -39,9 +51,26 @@ class HybridRetrievalBenchmark:
     and our Multi-Hybrid RAG engine over child tutoring and emotional rapport memories.
     """
 
-    def __init__(self, pool: asyncpg.Pool, hybrid_engine: HybridRetrievalEngine) -> None:
+    def __init__(
+        self, pool: asyncpg.Pool, hybrid_engine: HybridRetrievalEngine
+    ) -> None:
         self._pool = pool
         self.hybrid_engine = hybrid_engine
+
+    @staticmethod
+    def write_report(
+        result: BenchmarkComparisonResult, output_path: str | Path
+    ) -> None:
+        """Persist an explicitly labelled synthetic/evaluation benchmark result."""
+        path = Path(output_path)
+        path.write_text(
+            json.dumps(
+                {"benchmark_type": "synthetic_eval", "result": result.to_dict()},
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
     async def evaluate_benchmark(
         self,
@@ -63,7 +92,9 @@ class HybridRetrievalBenchmark:
             embedding_str = "[" + ",".join(str(f) for f in vec) + "]"
             async with self._pool.acquire() as conn:
                 async with conn.transaction():
-                    await conn.execute("SET LOCAL app.current_tenant_id = $1", str(tenant_id))
+                    await conn.execute(
+                        "SET LOCAL app.current_tenant_id = $1", str(tenant_id)
+                    )
                     await conn.execute("SET LOCAL hnsw.iterative_scan = relaxed_order")
                     dense_rows = await conn.fetch(
                         """

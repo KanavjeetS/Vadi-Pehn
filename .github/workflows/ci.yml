@@ -57,8 +57,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pytest pytest-asyncio pydantic pydantic-settings
-          pip install langgraph langchain-core httpx
+          pip install pytest pytest-asyncio pydantic pydantic-settings fastapi httpx asyncpg langfuse jinja2 numpy
+          pip install langgraph==0.2.74 langchain-core==0.3.80
 
       - name: Run unit tests
         env:
@@ -69,10 +69,7 @@ jobs:
           MINIO_SECRET_KEY: ci_test_secret
           JWT_SECRET_KEY: ci_test_jwt_secret_32_chars_min
         run: |
-          pytest services/orchestration/tests/ -v \
-            --tb=short \
-            -m "not integration" \
-            --asyncio-mode=auto
+          pytest -q -p pytest_asyncio.plugin --asyncio-mode=auto
 
   # ─────────────────────────────────────────────────────────
   # Safety Invariant Audit (runs on every push)

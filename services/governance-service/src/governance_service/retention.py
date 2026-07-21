@@ -2,6 +2,7 @@
 Retention Scheduler and Data Lifecycle Engine.
 Implements: PRD §3.4 (18-Month Memory Expiry & Consent Withdrawal Purge).
 """
+
 from __future__ import annotations
 
 from typing import Callable, Awaitable

@@ -3,11 +3,11 @@ Contextual Retrieval Service managing session recency window, learner interest p
 and rapport-gated career panel introductions (`services/memory-service/context.py`).
 Implements: PRD §4.3 (Rapport-gated career panel introductions), SD §3.2, and implementation_plan.md §4C.
 """
+
 from __future__ import annotations
 
 import json
 from typing import Any
-from uuid import UUID
 
 import asyncpg
 
@@ -67,7 +67,9 @@ class ContextualRetrievalService:
         async with self._pool.acquire() as conn:
             async with conn.transaction():
                 # Enforce RLS for all context queries
-                await conn.execute("SET LOCAL app.current_tenant_id = $1", str(query.tenant_id))
+                await conn.execute(
+                    "SET LOCAL app.current_tenant_id = $1", str(query.tenant_id)
+                )
 
                 # 2. Fetch recent session dialogue turns
                 session_history: list[dict[str, str]] = []
@@ -87,15 +89,26 @@ class ContextualRetrievalService:
                         session_window_size,
                     )
                     for row in reversed(rows):
-                        meta = json.loads(row["metadata"]) if isinstance(row["metadata"], str) else (row["metadata"] or {})
+                        meta = (
+                            json.loads(row["metadata"])
+                            if isinstance(row["metadata"], str)
+                            else (row["metadata"] or {})
+                        )
+                        item_consent = meta.get("consent_category") or meta.get(
+                            "consent_type"
+                        )
+                        if item_consent and item_consent in revoked_set:
+                            continue
                         role = meta.get("role", "user")
-                        session_history.append({"role": role, "content": row["content"]})
+                        session_history.append(
+                            {"role": role, "content": row["content"]}
+                        )
 
                 # 3. Fetch learner rapport score
                 rapport_val = await conn.fetchval(
                     """
-                    SELECT rapport_score FROM learners
-                    WHERE id = $1 AND tenant_id = $2
+                    SELECT composite_score AS rapport_score FROM rapport_scores
+                    WHERE learner_id = $1 AND tenant_id = $2
                     """,
                     query.learner_id,
                     query.tenant_id,
@@ -132,22 +145,25 @@ class ContextualRetrievalService:
                     if topics:
                         persona_rows = await conn.fetch(
                             """
-                            SELECT id, persona_name, career_domain, bio
+                            SELECT id,
+                                   display_name AS persona_name,
+                                   profession_taxonomy_code AS career_domain,
+                                   '' AS bio
                             FROM professional_personas
-                            WHERE tenant_id = $1
-                              AND career_domain = ANY($2::text[])
+                            WHERE profession_taxonomy_code = ANY($1::text[])
                             LIMIT 3
                             """,
-                            query.tenant_id,
                             list(topics),
                         )
                         for prow in persona_rows:
-                            matched_personas.append({
-                                "id": str(prow["id"]),
-                                "persona_name": prow["persona_name"],
-                                "career_domain": prow["career_domain"],
-                                "bio": prow["bio"],
-                            })
+                            matched_personas.append(
+                                {
+                                    "id": str(prow["id"]),
+                                    "persona_name": prow["persona_name"],
+                                    "career_domain": prow["career_domain"],
+                                    "bio": prow["bio"],
+                                }
+                            )
                         if matched_personas:
                             panel_introduced = True
 

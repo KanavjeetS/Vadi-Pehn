@@ -2,12 +2,12 @@
 Data Transfer Objects and Pydantic models for Governance Service.
 Implements: coding-standards §3 (full type hints on dataclass/pydantic models).
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
 from uuid import UUID
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class ConsentRecord(BaseModel):
@@ -15,6 +15,7 @@ class ConsentRecord(BaseModel):
 
     learner_id: UUID
     guardian_id: UUID
+    tenant_id: UUID | None = None
     conversation_storage: bool = True
     document_ingestion: bool = True
     voice_recording: bool = True

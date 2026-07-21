@@ -2,17 +2,47 @@
 Integration tests for OrchestrationGraph wiring with memory-service (Phase 5).
 Verifies RAG contextual retrieval, Jinja2 template rendering, and consent-gated async memory writing.
 """
+
 from datetime import datetime, timezone
 import os
 import sys
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 
 # Add dynamic paths so imports resolve correctly
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "services", "memory-service", "src")))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "services", "memory-service", "tests")))
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+)
+sys.path.insert(
+    0,
+    os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "..",
+            "services",
+            "memory-service",
+            "src",
+        )
+    ),
+)
+sys.path.insert(
+    0,
+    os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "..",
+            "services",
+            "memory-service",
+            "tests",
+        )
+    ),
+)
 
 from services.abstractions import MockLLMClient, MockSafetyClient, InMemoryVectorStore
 from services.orchestration.src.orchestration.graph import OrchestrationGraph
@@ -27,7 +57,9 @@ class MockConsentChecker:
     def __init__(self, is_active: bool = True) -> None:
         self.is_active = is_active
 
-    async def check_memory_write_consent(self, tenant_id: UUID, learner_id: UUID) -> bool:
+    async def check_memory_write_consent(
+        self, tenant_id: UUID, learner_id: UUID
+    ) -> bool:
         return self.is_active
 
 
@@ -84,8 +116,12 @@ async def test_orchestration_retrieves_memory_via_context_service_and_renders_ji
     embedding_client = MockEmbeddingClient()
     reranker = MockRerankerClient()
     retrieval_engine = HybridRetrievalEngine(mock_pool, embedding_client, reranker)
-    context_service = ContextualRetrievalService(mock_pool, retrieval_engine, rapport_threshold=70.0)
-    memory_writer = AsyncMemoryWriter(mock_pool, MockConsentChecker(True), embedding_client)
+    context_service = ContextualRetrievalService(
+        mock_pool, retrieval_engine, rapport_threshold=70.0
+    )
+    memory_writer = AsyncMemoryWriter(
+        mock_pool, MockConsentChecker(True), embedding_client
+    )
 
     # Initialize graph
     graph = OrchestrationGraph(
@@ -114,7 +150,10 @@ async def test_orchestration_retrieves_memory_via_context_service_and_renders_ji
 
     # Verify immediate acknowledgment is returned when panel triggers
     assert graph.llm_client.call_count == 0
-    assert state.final_reply == "yeh ek bahut acha sawal hai — mujhe apne doston se puchne do, ek second!"
+    assert (
+        state.final_reply
+        == "yeh ek bahut acha sawal hai — mujhe apne doston se puchne do, ek second!"
+    )
 
 
 @pytest.mark.asyncio
@@ -157,8 +196,12 @@ async def test_orchestration_blocks_panel_trigger_when_rapport_below_threshold()
 
     embedding_client = MockEmbeddingClient()
     retrieval_engine = HybridRetrievalEngine(mock_pool, embedding_client)
-    context_service = ContextualRetrievalService(mock_pool, retrieval_engine, rapport_threshold=70.0)
-    memory_writer = AsyncMemoryWriter(mock_pool, MockConsentChecker(True), embedding_client)
+    context_service = ContextualRetrievalService(
+        mock_pool, retrieval_engine, rapport_threshold=70.0
+    )
+    memory_writer = AsyncMemoryWriter(
+        mock_pool, MockConsentChecker(True), embedding_client
+    )
 
     graph = OrchestrationGraph(
         safety_client=MockSafetyClient(),

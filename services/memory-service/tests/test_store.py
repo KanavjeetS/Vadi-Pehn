@@ -2,32 +2,35 @@
 Unit and integration tests for PostgresMemoryStore and RLS tenant isolation.
 Implements: PRD §14 (testing strategy — RLS / tenant isolation), GUARDRAILS G-002 verification.
 """
+
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
-import pytest_asyncio
 
 import sys
 import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from services.abstractions import InMemoryVectorStore
 from memory_service.store import PostgresMemoryStore
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Mock asyncpg Pool & Connection for fast unit testing of SQL query structure
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class MockAsyncpgTransaction:
-    async def __aenter__(self): return self
-    async def __aexit__(self, exc_type, exc, tb): pass
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        pass
+
 
 class MockAsyncpgConnection:
     def __init__(self):
@@ -54,26 +57,34 @@ class MockAsyncpgConnection:
         if "SELECT id FROM tenants" in query:
             return [{"id": uuid4()}, {"id": uuid4()}]
         # Return mock row for query
-        return [{
-            "id": 1,
-            "tenant_id": args[1] if len(args) > 1 else uuid4(),
-            "learner_id": args[1] if len(args) > 1 else uuid4(),
-            "content": "Mock memory text",
-            "embedding_text": "[0.1, 0.2, 0.3]",
-            "created_at": datetime.now(timezone.utc),
-            "similarity_score": 0.95
-        }]
+        return [
+            {
+                "id": 1,
+                "tenant_id": args[1] if len(args) > 1 else uuid4(),
+                "learner_id": args[1] if len(args) > 1 else uuid4(),
+                "content": "Mock memory text",
+                "embedding_text": "[0.1, 0.2, 0.3]",
+                "created_at": datetime.now(timezone.utc),
+                "similarity_score": 0.95,
+            }
+        ]
+
 
 class MockAsyncpgPoolContext:
     def __init__(self, conn: MockAsyncpgConnection):
         self.conn = conn
+
     async def __aenter__(self) -> MockAsyncpgConnection:
         return self.conn
-    async def __aexit__(self, exc_type, exc, tb): pass
+
+    async def __aexit__(self, exc_type, exc, tb):
+        pass
+
 
 class MockAsyncpgPool:
     def __init__(self):
         self.conn = MockAsyncpgConnection()
+
     def acquire(self) -> MockAsyncpgPoolContext:
         return MockAsyncpgPoolContext(self.conn)
 
@@ -81,6 +92,7 @@ class MockAsyncpgPool:
 # ─────────────────────────────────────────────────────────────────────────────
 # UNIT TESTS (Verify SQL/RLS SET LOCAL parameters without external DB)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_postgres_store_write_sets_tenant_rls():
@@ -95,7 +107,7 @@ async def test_postgres_store_write_sets_tenant_rls():
         learner_id=learner_id,
         content="Test content",
         embedding=[0.1, 0.2, 0.3],
-        metadata={"session_id": str(uuid4())}
+        metadata={"session_id": str(uuid4())},
     )
 
     assert row_id == "12345"
@@ -115,10 +127,7 @@ async def test_postgres_store_query_sets_rls_and_hnsw_params():
     learner_id = uuid4()
 
     chunks = await store.query(
-        tenant_id=tenant_id,
-        learner_id=learner_id,
-        query_embedding=[0.1, 0.2, 0.3],
-        k=3
+        tenant_id=tenant_id, learner_id=learner_id, query_embedding=[0.1, 0.2, 0.3], k=3
     )
 
     assert len(chunks) == 1
@@ -139,7 +148,9 @@ async def test_postgres_store_delete_for_learner():
     tenant_id = uuid4()
     learner_id = uuid4()
 
-    deleted_count = await store.delete_for_learner(tenant_id=tenant_id, learner_id=learner_id)
+    deleted_count = await store.delete_for_learner(
+        tenant_id=tenant_id, learner_id=learner_id
+    )
     assert deleted_count == 2
     executed = [q[0] for q in pool.conn.executed_queries]
     assert any("SET LOCAL app.current_tenant_id = $1" in q for q in executed)
@@ -156,4 +167,7 @@ async def test_postgres_store_prune_expired():
     assert pruned == 4  # 2 tenants * 2 deleted rows
     executed = [q[0] for q in pool.conn.executed_queries]
     assert any("SET LOCAL app.current_tenant_id = $1" in q for q in executed)
-    assert any("DELETE FROM learner_memories" in q and "expires_at <= NOW()" in q for q in executed)
+    assert any(
+        "DELETE FROM learner_memories" in q and "expires_at <= NOW()" in q
+        for q in executed
+    )

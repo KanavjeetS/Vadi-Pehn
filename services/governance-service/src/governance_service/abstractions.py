@@ -3,10 +3,10 @@ Abstract base classes for the Governance Service.
 Implements: coding-standards §3 (abstract-first pattern).
 PRD §3 (Consent & Governance), SD §3.4 (Governance DB).
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
 from uuid import UUID
 
 from governance_service.models import (
@@ -29,7 +29,9 @@ class ConsentLedgerEngine(ABC):
         ...
 
     @abstractmethod
-    async def update_consent(self, *, learner_id: UUID, payload: ConsentUpdatePayload) -> ConsentRecord:
+    async def update_consent(
+        self, *, learner_id: UUID, payload: ConsentUpdatePayload
+    ) -> ConsentRecord:
         """Update consent settings. Revoking consent triggers immediate data deletion."""
         ...
 
@@ -54,7 +56,9 @@ class IncidentEscalationEngine(ABC):
         ...
 
     @abstractmethod
-    async def acknowledge_incident(self, *, incident_id: str, reviewer_id: str) -> SafetyIncident:
+    async def acknowledge_incident(
+        self, *, incident_id: str, reviewer_id: str
+    ) -> SafetyIncident:
         """Mark incident acknowledged by human reviewer."""
         ...
 

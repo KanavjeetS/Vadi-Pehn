@@ -3,6 +3,7 @@ Karpathy autoresearch loop for Vadi-Pehn Sibling LLM fine-tuning and GRPO alignm
 Implements: PRD §8, SD §10, and implementation_plan.md §3 (Autoresearch loop integration).
 Iteratively explores hyperparameters overnight, enforcing our strict safety regression gate.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,6 +24,7 @@ from sibling_training.sft_trainer import MockSFTTrainer, NanochatSFTTrainer
 @dataclass
 class AutoresearchExperiment:
     """Hyperparameter candidate explored by the autoresearch loop."""
+
     experiment_id: str
     learning_rate: float
     optimizer: OptimizerType
@@ -39,7 +41,12 @@ class AutoresearchLoop:
     while beating validation loss.
     """
 
-    def __init__(self, mode: str = "sft", use_mock: bool = False, output_dir: Path = Path("checkpoints")) -> None:
+    def __init__(
+        self,
+        mode: str = "sft",
+        use_mock: bool = False,
+        output_dir: Path = Path("checkpoints"),
+    ) -> None:
         self.mode = mode
         self.use_mock = use_mock
         self.output_dir = output_dir
@@ -57,7 +64,9 @@ class AutoresearchLoop:
                 fp8_enabled=exp.fp8_enabled,
                 output_dir=self.output_dir,
             )
-            return MockSFTTrainer(config) if self.use_mock else NanochatSFTTrainer(config)
+            return (
+                MockSFTTrainer(config) if self.use_mock else NanochatSFTTrainer(config)
+            )
         else:
             config = GRPOConfig(
                 learning_rate=exp.learning_rate,
@@ -67,7 +76,11 @@ class AutoresearchLoop:
                 beta_kl_penalty=exp.beta_kl_penalty,
                 output_dir=self.output_dir,
             )
-            return MockGRPOTrainer(config) if self.use_mock else NanochatGRPOTrainer(config)
+            return (
+                MockGRPOTrainer(config)
+                if self.use_mock
+                else NanochatGRPOTrainer(config)
+            )
 
     async def run_experiment(
         self,
@@ -88,19 +101,23 @@ class AutoresearchLoop:
         # Checkpoint is ONLY saved and accepted if safety compliance is maintained (>= 1.0 baseline)
         if safety_score >= 1.0 and val_loss < self.best_val_loss:
             self.best_val_loss = val_loss
-            ckpt_path = await trainer.save_checkpoint(step=len(train_batches), version_tag=exp.experiment_id)
+            ckpt_path = await trainer.save_checkpoint(
+                step=len(train_batches), version_tag=exp.experiment_id
+            )
             self.best_checkpoint = ckpt_path
             if last_result:
                 last_result.checkpoint_path = ckpt_path
 
-        self.history.append({
-            "experiment_id": exp.experiment_id,
-            "learning_rate": exp.learning_rate,
-            "optimizer": exp.optimizer.value,
-            "val_loss": val_loss,
-            "safety_score": safety_score,
-            "accepted": safety_score >= 1.0 and val_loss == self.best_val_loss,
-        })
+        self.history.append(
+            {
+                "experiment_id": exp.experiment_id,
+                "learning_rate": exp.learning_rate,
+                "optimizer": exp.optimizer.value,
+                "val_loss": val_loss,
+                "safety_score": safety_score,
+                "accepted": safety_score >= 1.0 and val_loss == self.best_val_loss,
+            }
+        )
 
         if last_result is None:
             raise RuntimeError(f"Experiment {exp.experiment_id} executed 0 steps")
@@ -119,6 +136,8 @@ class AutoresearchLoop:
         return {
             "total_experiments": len(experiments),
             "best_val_loss": self.best_val_loss,
-            "best_checkpoint": str(self.best_checkpoint) if self.best_checkpoint else None,
+            "best_checkpoint": (
+                str(self.best_checkpoint) if self.best_checkpoint else None
+            ),
             "history": self.history,
         }

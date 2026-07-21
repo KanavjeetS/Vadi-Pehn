@@ -15,20 +15,20 @@ CRITICAL INVARIANTS (see GUARDRAILS.md):
   G-004: On voice path, check_output_safety is called PER CHUNK before TTS.
   No node producing user-facing text skips check_output_safety.
 """
+
 from __future__ import annotations
 
 import hashlib
-import time
 import uuid
 import os
 import sys
-from typing import Annotated, Any, Literal
+from typing import Any, AsyncIterator, Literal
 from uuid import UUID
 
-from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel
 import jinja2
+import httpx
 
 # Import Langfuse observability decorators
 from langfuse import observe, propagate_attributes
@@ -37,20 +37,88 @@ from langfuse import observe, propagate_attributes
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # Add memory-service path dynamically
-memory_service_src = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "memory-service", "src"))
+memory_service_src = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "memory-service", "src")
+)
 if memory_service_src not in sys.path:
     sys.path.insert(0, memory_service_src)
 
-from services.abstractions import (
+from services.abstractions import (  # noqa: E402
     LLMClient,
     MemoryChunk,
     MemoryStore,
-    MockLLMClient,
-    MockSafetyClient,
     SafetyClient,
     SafetyVerdict,
     SafetyVerdictCode,
 )
+from services.config import settings  # noqa: E402
+
+
+class GovernanceIncidentClient:
+    """Abstract incident transport used by the orchestration safety path."""
+
+    async def create_incident(
+        self,
+        *,
+        tenant_id: UUID,
+        learner_id: UUID,
+        category: str,
+        transcript_excerpt: str,
+    ) -> str:
+        raise NotImplementedError
+
+
+class HttpGovernanceIncidentClient(GovernanceIncidentClient):
+    """Network client with direct paging fallback when Governance is unavailable."""
+
+    async def create_incident(
+        self,
+        *,
+        tenant_id: UUID,
+        learner_id: UUID,
+        category: str,
+        transcript_excerpt: str,
+    ) -> str:
+        payload = {
+            "tenant_id": str(tenant_id),
+            "learner_id": str(learner_id),
+            "category": category,
+            "transcript_excerpt": transcript_excerpt[:500],
+        }
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                response = await client.post(
+                    f"{settings.governance.url.rstrip('/')}/internal/v1/governance/incident",
+                    json=payload,
+                    headers=(
+                        {"X-Internal-Service-Token": settings.internal_service_token}
+                        if settings.internal_service_token
+                        else {}
+                    ),
+                )
+                response.raise_for_status()
+                return str(response.json()["incident_id"])
+        except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            await self._page_fallback(payload)
+            return "pending_manual_review"
+
+    async def _page_fallback(self, payload: dict[str, str]) -> None:
+        if not settings.governance.sms_webhook_url:
+            return
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                await client.post(
+                    settings.governance.sms_webhook_url,
+                    json=payload,
+                    headers=(
+                        {"X-Internal-Service-Token": settings.internal_service_token}
+                        if settings.internal_service_token
+                        else {}
+                    ),
+                )
+        except httpx.HTTPError:
+            return
+
 
 try:
     from memory_service.abstractions import EmbeddingClient, HybridRetrievalQuery
@@ -78,18 +146,18 @@ class TurnState(BaseModel):
 
     # ── Identity (set by API layer before graph entry) ──
     session_id: str
-    tenant_id: str                  # UUID str — hashed for Langfuse traces
-    learner_id: str                 # UUID str — hashed for Langfuse traces
-    age_band: int                   # 8-10=1, 11-13=2, 14-17=3
-    turn_id: str = ""               # set in check_input_safety
-    turn_count: int = 1             # current session turn index (PRD §4.3)
+    tenant_id: str  # UUID str — hashed for Langfuse traces
+    learner_id: str  # UUID str — hashed for Langfuse traces
+    age_band: int  # 8-10=1, 11-13=2, 14-17=3
+    turn_id: str = ""  # set in check_input_safety
+    turn_count: int = 1  # current session turn index (PRD §4.3)
 
     # ── Input (set by API layer) ──
     message_text: str
     language_detected: str = "en"
 
     # ── Safety (set by check_input_safety) ──
-    safety_verdict_input: dict[str, Any] | None = None   # SafetyVerdict as dict
+    safety_verdict_input: dict[str, Any] | None = None  # SafetyVerdict as dict
 
     # ── Memory (set by retrieve_memory) ──
     memory_context: list[dict[str, Any]] = []
@@ -102,8 +170,10 @@ class TurnState(BaseModel):
 
     # ── Generation (set by generate_reply) ──
     draft_reply: str = ""
-    session_capped: bool = False            # True if daily session cap hit (PRD §4.3)
-    ai_disclosure_added: bool = False       # True if periodic AI identity disclosure added (PRD §4.1)
+    session_capped: bool = False  # True if daily session cap hit (PRD §4.3)
+    ai_disclosure_added: bool = (
+        False  # True if periodic AI identity disclosure added (PRD §4.1)
+    )
 
     # ── Output Safety (set by check_output_safety) ──
     safety_verdict_output: dict[str, Any] | None = None
@@ -143,6 +213,7 @@ class OrchestrationGraph:
         embedding_client: EmbeddingClient | None = None,
         context_service: ContextualRetrievalService | None = None,
         memory_writer: AsyncMemoryWriter | None = None,
+        governance_client: GovernanceIncidentClient | None = None,
     ) -> None:
         self.safety_client = safety_client
         self.memory_store = memory_store
@@ -152,9 +223,12 @@ class OrchestrationGraph:
         self.embedding_client = embedding_client
         self.context_service = context_service
         self.memory_writer = memory_writer
+        self.governance_client = governance_client
         self._graph = self._build()
 
-    def _load_jinja_persona(self, filename: str = "sibling.jinja2") -> jinja2.Template | None:
+    def _load_jinja_persona(
+        self, filename: str = "sibling.jinja2"
+    ) -> jinja2.Template | None:
         """Loads the Sibling Mentor system template from a versioned JINJA2 file."""
         base_paths = [
             os.path.join(os.path.dirname(__file__), "..", "..", "personas"),
@@ -185,21 +259,34 @@ class OrchestrationGraph:
             age_band=state.age_band,
             tenant_id=UUID(state.tenant_id),
         )
-        return state.model_copy(update={
-            "turn_id": turn_id,
-            "safety_verdict_input": {
-                "code": verdict.code.value,
-                "taxonomy_code": verdict.taxonomy_code,
-                "blocks_generation": verdict.blocks_generation,
-            },
-        })
+        return state.model_copy(
+            update={
+                "turn_id": turn_id,
+                "safety_verdict_input": {
+                    "code": verdict.code.value,
+                    "taxonomy_code": verdict.taxonomy_code,
+                    "blocks_generation": verdict.blocks_generation,
+                },
+            }
+        )
 
     # ── Routing: after check_input_safety ────────────────────────────────
-    def _route_after_input_safety(self, state: TurnState) -> Literal["retrieve_memory", "handle_unsafe_input"]:
+    def _route_after_input_safety(
+        self, state: TurnState
+    ) -> Literal["retrieve_memory", "handle_unsafe_input"]:
         verdict = state.safety_verdict_input or {}
         if verdict.get("blocks_generation", True):
             return "handle_unsafe_input"
         return "retrieve_memory"
+
+    def _route_after_output_safety(
+        self, state: TurnState
+    ) -> Literal["write_memory", "create_governance_incident"]:
+        """Route incident turns to governance after their fixed reply is output-gated."""
+        input_code = (state.safety_verdict_input or {}).get("code")
+        if input_code != SafetyVerdictCode.SAFE.value:
+            return "create_governance_incident"
+        return "write_memory"
 
     # ── Node: retrieve_memory ─────────────────────────────────────────────
     @observe(name="retrieve_memory")
@@ -224,14 +311,20 @@ class OrchestrationGraph:
                 {"content": item.content, "chunk_id": str(item.memory_id)}
                 for item in summary.retrieved_memories
             ]
-            return state.model_copy(update={
-                "memory_context": memory_context,
-                "panel_triggered": summary.panel_introduced,
-                "panel_result": {
-                    "personas": summary.matched_personas,
-                    "rapport_score": summary.rapport_score,
-                } if summary.panel_introduced else None,
-            })
+            return state.model_copy(
+                update={
+                    "memory_context": memory_context,
+                    "panel_triggered": summary.panel_introduced,
+                    "panel_result": (
+                        {
+                            "personas": summary.matched_personas,
+                            "rapport_score": summary.rapport_score,
+                        }
+                        if summary.panel_introduced
+                        else None
+                    ),
+                }
+            )
         else:
             # Fallback legacy query
             stub_embedding = [0.0] * 1536
@@ -241,12 +334,13 @@ class OrchestrationGraph:
                 query_embedding=stub_embedding,
                 k=5,
             )
-            return state.model_copy(update={
-                "memory_context": [
-                    {"content": c.content, "chunk_id": c.chunk_id}
-                    for c in chunks
-                ]
-            })
+            return state.model_copy(
+                update={
+                    "memory_context": [
+                        {"content": c.content, "chunk_id": c.chunk_id} for c in chunks
+                    ]
+                }
+            )
 
     # ── Node: detect_panel_trigger ────────────────────────────────────────
     @observe(name="detect_panel_trigger")
@@ -259,8 +353,19 @@ class OrchestrationGraph:
         if state.panel_triggered:
             return state
 
-        career_keywords = ["job", "career", "work", "profession", "engineer", "doctor",
-                           "farmer", "teacher", "future", "kya banunga", "kya banugi"]
+        career_keywords = [
+            "job",
+            "career",
+            "work",
+            "profession",
+            "engineer",
+            "doctor",
+            "farmer",
+            "teacher",
+            "future",
+            "kya banunga",
+            "kya banugi",
+        ]
         triggered = any(kw in state.message_text.lower() for kw in career_keywords)
         return state.model_copy(update={"panel_triggered": triggered})
 
@@ -276,10 +381,12 @@ class OrchestrationGraph:
         MAX_DAILY_TURNS = 20
         if state.turn_count >= MAX_DAILY_TURNS:
             wind_down = "Aaj ke liye humne kafi baatein kar li hain! Chalo abhi rest karte hain aur baki baatein kal karenge."
-            return state.model_copy(update={
-                "draft_reply": wind_down,
-                "session_capped": True,
-            })
+            return state.model_copy(
+                update={
+                    "draft_reply": wind_down,
+                    "session_capped": True,
+                }
+            )
 
         # Load and render system prompt template from Jinja2
         context_text = "\n".join(c["content"] for c in state.memory_context)
@@ -302,10 +409,12 @@ class OrchestrationGraph:
 
         if is_no_match:
             draft = "yeh ek bohot unique aur naya interest hai! Main is par research karke tumhe kal detailed info bataunga."
-            return state.model_copy(update={
-                "draft_reply": draft,
-                "unmatched_interest_queued": True,
-            })
+            return state.model_copy(
+                update={
+                    "draft_reply": draft,
+                    "unmatched_interest_queued": True,
+                }
+            )
 
         if state.panel_triggered and not state.final_reply:
             # Immediate in-character acknowledgment (PRD §5.3)
@@ -322,16 +431,51 @@ class OrchestrationGraph:
         # PRD §4.1: Persistent AI identity disclosure (every 5 turns or when attachment triggered)
         disclosure_added = False
         attachment_terms = ["best friend", "asli bhai", "real brother", "only friend"]
-        is_attachment_expressed = any(term in state.message_text.lower() for term in attachment_terms)
+        is_attachment_expressed = any(
+            term in state.message_text.lower() for term in attachment_terms
+        )
         if state.turn_count % 5 == 0 or is_attachment_expressed:
             ai_note = " (jaise maine bataya, main ek AI mentor hoon, asli brother nahi, par tumhari madad karke mujhe bahut khushi hoti hai)"
             draft += ai_note
             disclosure_added = True
 
-        return state.model_copy(update={
-            "draft_reply": draft,
-            "ai_disclosure_added": disclosure_added,
-        })
+        return state.model_copy(
+            update={
+                "draft_reply": draft,
+                "ai_disclosure_added": disclosure_added,
+            }
+        )
+
+    async def stream_reply(self, state: TurnState) -> AsyncIterator[str]:
+        """Stream a safety-prechecked draft for the voice gateway.
+
+        The voice pipeline owns the input safety check before calling this
+        method and output safety for every sentence before TTS.
+        """
+        memory_state = await self.retrieve_memory(state)
+        panel_state = await self.detect_panel_trigger(memory_state)
+        if panel_state.panel_triggered:
+            yield "yeh ek bahut acha sawal hai — mujhe apne doston se puchne do, ek second!"
+            return
+
+        context_text = "\n".join(c["content"] for c in panel_state.memory_context)
+        jinja_template = self._load_jinja_persona("sibling.jinja2")
+        if jinja_template:
+            system_prompt = jinja_template.render(
+                context=context_text,
+                age_band=state.age_band,
+                language=state.language_detected,
+            )
+        else:
+            system_prompt = self.persona_template.format(context=context_text)
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": state.message_text},
+        ]
+        async for chunk in self.llm_client.stream(messages=messages, temperature=0.7):
+            if chunk:
+                yield chunk
 
     # ── Node: check_output_safety ─────────────────────────────────────────
     @observe(name="check_output_safety")
@@ -351,14 +495,23 @@ class OrchestrationGraph:
         }
         # If output unsafe: replace with a safe fallback — do not surface raw error
         if verdict.blocks_generation:
-            final = "I'm sorry, let me think of a better way to say that."
+            fallback = "I'm sorry, let me think of a better way to say that."
+            fallback_verdict: SafetyVerdict = await self.safety_client.check_output(
+                learner_id=UUID(state.learner_id),
+                draft_reply_text=fallback,
+                tenant_id=UUID(state.tenant_id),
+            )
+            final = "" if fallback_verdict.blocks_generation else fallback
+            verdict_dict["fallback_code"] = fallback_verdict.code.value
         else:
             final = state.draft_reply
 
-        return state.model_copy(update={
-            "safety_verdict_output": verdict_dict,
-            "final_reply": final,
-        })
+        return state.model_copy(
+            update={
+                "safety_verdict_output": verdict_dict,
+                "final_reply": final,
+            }
+        )
 
     # ── Node: write_memory ────────────────────────────────────────────────
     @observe(name="write_memory")
@@ -367,6 +520,10 @@ class OrchestrationGraph:
         Write this turn's text to memory AFTER reply is delivered (async).
         Wired with AsyncMemoryWriter to check consent and write asynchronously.
         """
+        input_code = (state.safety_verdict_input or {}).get("code")
+        if not state.final_reply or input_code != SafetyVerdictCode.SAFE.value:
+            return state
+
         if self.memory_writer:
             self.memory_writer.write_memory_async(
                 tenant_id=UUID(state.tenant_id),
@@ -376,7 +533,7 @@ class OrchestrationGraph:
                 metadata={
                     "role": "assistant",
                     "turn_id": state.turn_id,
-                }
+                },
             )
         else:
             # Fallback legacy memory store query
@@ -398,7 +555,11 @@ class OrchestrationGraph:
         """
         verdict_code = (state.safety_verdict_input or {}).get("code", "unsafe_general")
 
-        if verdict_code in ("unsafe_self_harm", "unsafe_abuse_disclosure"):
+        if verdict_code in (
+            "unsafe_self_harm",
+            "unsafe_abuse_disclosure",
+            "classifier_unavailable",
+        ):
             fixed_reply = (
                 "main sun raha/rahi hoon. jo tum share kar rahe ho woh bahut bhari baat hai. "
                 "please kisi bade pe bharosa karo — teacher, ghar mein koi, ya helpline. "
@@ -407,10 +568,12 @@ class OrchestrationGraph:
         else:
             fixed_reply = "main is vishay par baat nahi kar sakta, lekin doosre kisi cheez mein madad kar sakta hoon?"
 
-        return state.model_copy(update={
-            "final_reply": fixed_reply,
-            "draft_reply": fixed_reply,
-        })
+        return state.model_copy(
+            update={
+                "final_reply": fixed_reply,
+                "draft_reply": fixed_reply,
+            }
+        )
 
     # ── Node: create_governance_incident ──────────────────────────────────
     @observe(name="create_governance_incident")
@@ -419,9 +582,22 @@ class OrchestrationGraph:
         Write safety incident to Governance DB via Governance Service.
         """
         verdict_code = (state.safety_verdict_input or {}).get("code", "")
-        if verdict_code in ("unsafe_self_harm", "unsafe_abuse_disclosure"):
+        if verdict_code in (
+            "unsafe_self_harm",
+            "unsafe_abuse_disclosure",
+            "classifier_unavailable",
+        ):
             incident_id = str(uuid.uuid4())
-            print(f"[INCIDENT] {incident_id} | severity={verdict_code} | learner={_hash_id(state.learner_id)}")
+            if self.governance_client:
+                incident_id = await self.governance_client.create_incident(
+                    tenant_id=UUID(state.tenant_id),
+                    learner_id=UUID(state.learner_id),
+                    category=verdict_code,
+                    transcript_excerpt=state.message_text,
+                )
+            print(
+                f"[INCIDENT] {incident_id} | severity={verdict_code} | learner={_hash_id(state.learner_id)}"
+            )
             return state.model_copy(update={"incident_id": incident_id})
         return state
 
@@ -459,18 +635,33 @@ class OrchestrationGraph:
         g.add_edge("retrieve_memory", "detect_panel_trigger")
         g.add_edge("detect_panel_trigger", "generate_reply")
         g.add_edge("generate_reply", "check_output_safety")
-        g.add_edge("check_output_safety", "write_memory")
+        g.add_conditional_edges(
+            "check_output_safety",
+            self._route_after_output_safety,
+            {
+                "write_memory": "write_memory",
+                "create_governance_incident": "create_governance_incident",
+            },
+        )
         g.add_edge("write_memory", END)
 
         # Unsafe path
-        g.add_edge("handle_unsafe_input", "create_governance_incident")
+        g.add_edge("handle_unsafe_input", "check_output_safety")
         g.add_edge("create_governance_incident", END)
 
         return g.compile()
 
     @observe(name="vadi_pehn_turn")
-    async def run_turn(self, *, session_id: str, tenant_id: str, learner_id: str,
-                       age_band: int, message_text: str, language: str = "hi") -> TurnState:
+    async def run_turn(
+        self,
+        *,
+        session_id: str,
+        tenant_id: str,
+        learner_id: str,
+        age_band: int,
+        message_text: str,
+        language: str = "hi",
+    ) -> TurnState:
         """Run one conversation turn through the full graph."""
         initial_state = TurnState(
             session_id=session_id,
@@ -489,7 +680,7 @@ class OrchestrationGraph:
                 metadata={
                     "tenant_id": _hash_id(tenant_id),
                     "language": language,
-                }
+                },
             ):
                 result = await self._graph.ainvoke(initial_state)
         except Exception:

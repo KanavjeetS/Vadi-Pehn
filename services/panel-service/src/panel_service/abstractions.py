@@ -3,10 +3,10 @@ Abstract base classes for the Multi-Agent Career Panel Service.
 Implements: coding-standards §3 (abstract-first pattern).
 PRD §5 (Career Exploration Panels), SD §4.4 (Panel Engine).
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
 from uuid import UUID
 
 from panel_service.models import (

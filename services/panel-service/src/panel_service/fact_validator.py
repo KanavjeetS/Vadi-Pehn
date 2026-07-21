@@ -3,6 +3,7 @@ Fact Validation Engine for Panel Service.
 Cross-references career claims against approved fact references.
 Implements: PRD §5.1 (Fact Validation Agent).
 """
+
 from __future__ import annotations
 
 from panel_service.abstractions import FactValidationEngine

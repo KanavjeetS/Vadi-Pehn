@@ -3,15 +3,14 @@ Supervised Fine-Tuning (SFT) training engine for the Vadi-Pehn Sibling LLM.
 Implements: Karpathy nanochat training architecture (`Muon`/`AdamW` selection, 5-min GPU checkpoints),
 PRD §8, SD §10.
 """
+
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from sibling_training.abstractions import (
-    OptimizerType,
     SFTConfig,
     TrainerClient,
     TrainingStepResult,
@@ -36,7 +35,9 @@ class NanochatSFTTrainer(TrainerClient):
     def _init_results_tsv(self) -> None:
         if not self.config.results_tsv_path.exists():
             with open(self.config.results_tsv_path, "w", encoding="utf-8") as f:
-                f.write("timestamp\tepoch\tstep\toptimizer\ttrain_loss\tval_loss\tperplexity\tsafety_score\tcheckpoint\n")
+                f.write(
+                    "timestamp\tepoch\tstep\toptimizer\ttrain_loss\tval_loss\tperplexity\tsafety_score\tcheckpoint\n"
+                )
 
     def _log_to_tsv(self, res: TrainingStepResult) -> None:
         ckpt = str(res.checkpoint_path) if res.checkpoint_path else "none"
@@ -46,7 +47,9 @@ class NanochatSFTTrainer(TrainerClient):
                 f"{res.train_loss:.4f}\t{res.val_loss:.4f}\t{res.perplexity:.4f}\t{res.safety_eval_score:.4f}\t{ckpt}\n"
             )
 
-    async def train_step(self, step: int, batch_data: list[dict[str, Any]]) -> TrainingStepResult:
+    async def train_step(
+        self, step: int, batch_data: list[dict[str, Any]]
+    ) -> TrainingStepResult:
         """Execute one SFT optimization step across batch_data."""
         self.current_step = step
         # Simulated or actual loss calculation depending on torch availability/mode
@@ -67,7 +70,9 @@ class NanochatSFTTrainer(TrainerClient):
         self._log_to_tsv(res)
         return res
 
-    async def evaluate_validation(self, val_data: list[dict[str, Any]]) -> tuple[float, float, float]:
+    async def evaluate_validation(
+        self, val_data: list[dict[str, Any]]
+    ) -> tuple[float, float, float]:
         """Evaluate current model state against val_data and return (val_loss, perplexity, safety_score)."""
         if not val_data:
             return 1.2, math.exp(1.2), 1.0
@@ -78,7 +83,9 @@ class NanochatSFTTrainer(TrainerClient):
         """Persist checkpoint binary/metadata to `vadi-pehn-sibling-sft-v<version_tag>.bin`."""
         ckpt_path = self.config.output_dir / f"vadi-pehn-sibling-sft-v{version_tag}.bin"
         with open(ckpt_path, "w", encoding="utf-8") as f:
-            f.write(f"VADI_PEHN_SFT_CHECKPOINT_V1\nmodel: {self.config.model_name}\nstep: {step}\nfp8: {self.config.fp8_enabled}\n")
+            f.write(
+                f"VADI_PEHN_SFT_CHECKPOINT_V1\nmodel: {self.config.model_name}\nstep: {step}\nfp8: {self.config.fp8_enabled}\n"
+            )
         return ckpt_path
 
 
@@ -89,7 +96,9 @@ class MockSFTTrainer(TrainerClient):
         self.config = config or SFTConfig()
         self.steps_executed: list[int] = []
 
-    async def train_step(self, step: int, batch_data: list[dict[str, Any]]) -> TrainingStepResult:
+    async def train_step(
+        self, step: int, batch_data: list[dict[str, Any]]
+    ) -> TrainingStepResult:
         self.steps_executed.append(step)
         return TrainingStepResult(
             step=step,
@@ -101,7 +110,9 @@ class MockSFTTrainer(TrainerClient):
             optimizer_used=self.config.optimizer.value,
         )
 
-    async def evaluate_validation(self, val_data: list[dict[str, Any]]) -> tuple[float, float, float]:
+    async def evaluate_validation(
+        self, val_data: list[dict[str, Any]]
+    ) -> tuple[float, float, float]:
         return 1.25, 3.49, 1.0
 
     async def save_checkpoint(self, step: int, version_tag: str) -> Path:
