@@ -12,8 +12,6 @@ from typing import Any, AsyncIterator
 import httpx
 
 from services.abstractions import LLMClient
-from services.config import settings
-
 logger = logging.getLogger("orchestration.ollama_client")
 
 
@@ -44,34 +42,9 @@ class OllamaLLMClient(LLMClient):
         """
         Generate text completion using local Ollama model API.
         """
-        # 1. Groq Cloud Sub-100ms LPU Hardware Acceleration if API Key is configured
-        if settings.groq.api_key:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {settings.groq.api_key}",
-                    "Content-Type": "application/json",
-                }
-                groq_payload = {
-                    "model": settings.groq.llm_model,
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                    "stream": False,
-                }
-                async with httpx.AsyncClient(timeout=4.0) as client:
-                    resp = await client.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        json=groq_payload,
-                        headers=headers,
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    content = data["choices"][0]["message"]["content"]
-                    return [content] if stream else content
-            except Exception as exc:
-                logger.warn(f"Groq API call failed, falling back to local Ollama: {exc}")
-
-        # 2. Local Ollama LLM execution
+        # This client is for isolated local development only. Production generation
+        # is routed through SafetyProxyLLMClient, where safety controls own the
+        # model network boundary.
         payload = {
             "model": self.model,
             "messages": messages,
@@ -104,12 +77,9 @@ class OllamaLLMClient(LLMClient):
                                 chunks.append(chunk_text)
                     return chunks if chunks else ["[Ollama Stream Complete]"]
 
-        except Exception as err:
-            logger.error(f"Ollama generation failed: {err}. Falling back to offline response.")
-            fallback_msg = (
-                "I am here with you! Let's keep exploring together."
-            )
-            return [fallback_msg] if stream else fallback_msg
+        except httpx.HTTPError as exc:
+            logger.error("Ollama generation failed")
+            raise RuntimeError("Local LLM provider unavailable") from exc
 
     async def stream(
         self,
@@ -144,6 +114,6 @@ class OllamaLLMClient(LLMClient):
                                     yield token
                             except json.JSONDecodeError:
                                 continue
-        except Exception as err:
-            logger.error(f"Ollama stream error: {err}")
-            yield "I am here with you!"
+        except httpx.HTTPError as exc:
+            logger.error("Ollama stream failed")
+            raise RuntimeError("Local LLM provider unavailable") from exc

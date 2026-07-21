@@ -8,10 +8,13 @@ from __future__ import annotations
 import sys
 import os
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(
+    0, os.path.join(os.path.dirname(__file__), "..", "..", "safety-proxy", "src")
+)
 
 from panel_service.crew import CrewAIPanelRunner
 from panel_service.diversity import PanelSelector
@@ -22,6 +25,8 @@ from panel_service.models import (
     PanelResponse,
 )
 from panel_service.slm_ocr import QwenSLMOCRService
+from safety_proxy.client import NeMoSafetyClient
+from services.config import require_internal_service_token
 
 app = FastAPI(
     title="Vadi-Pehn Panel Service",
@@ -30,7 +35,7 @@ app = FastAPI(
 )
 
 selector = PanelSelector()
-runner = CrewAIPanelRunner()
+runner = CrewAIPanelRunner(safety_client=NeMoSafetyClient())
 ocr_service = QwenSLMOCRService()
 
 
@@ -40,10 +45,14 @@ async def health_check() -> dict[str, str]:
 
 
 @app.post("/internal/v1/panel/trigger", response_model=PanelResponse)
-async def trigger_panel(request: PanelRequest) -> PanelResponse:
+async def trigger_panel(
+    request: PanelRequest,
+    x_internal_service_token: str = Header(default=""),
+) -> PanelResponse:
     """
     Triggers a 3-agent career exploration panel (SD §4.4).
     """
+    require_internal_service_token(x_internal_service_token)
     try:
         personas, status = await selector.select_panel_personas(
             learner_id=request.learner_id,
@@ -56,10 +65,14 @@ async def trigger_panel(request: PanelRequest) -> PanelResponse:
 
 
 @app.post("/internal/v1/panel/ingest-document", response_model=OCRDocumentResponse)
-async def ingest_document(request: OCRDocumentRequest) -> OCRDocumentResponse:
+async def ingest_document(
+    request: OCRDocumentRequest,
+    x_internal_service_token: str = Header(default=""),
+) -> OCRDocumentResponse:
     """
     Processes academic document OCR with confidence gating (< 0.85 -> discrepancy queue).
     """
+    require_internal_service_token(x_internal_service_token)
     try:
         return await ocr_service.process_document(request=request)
     except Exception as e:

@@ -220,3 +220,37 @@ async def test_e2e_crewai_panel_execution() -> None:
     assert len(res.selected_personas) == 3
     assert res.fact_check_passed
     assert not res.queued_for_curation
+
+
+@pytest.mark.asyncio
+async def test_panel_output_is_blocked_when_safety_blocks_generation() -> None:
+    from services.abstractions import MockSafetyClient, SafetyVerdictCode
+
+    runner = CrewAIPanelRunner(
+        safety_client=MockSafetyClient(
+            default_verdict=SafetyVerdictCode.UNSAFE_GENERAL
+        )
+    )
+    persona = ProfessionalPersona(
+        persona_id="p_safe_test",
+        code="TECH_DEV",
+        title="Synthetic Technology Mentor",
+        domain="Technology",
+        profession_taxonomy_code="TECH",
+        description="[SYNTHETIC_TEST_CASE]",
+        approved_fact_source_ref="synthetic_reference.json",
+    )
+    request = PanelRequest(
+        session_id="panel_safety_test",
+        tenant_id=uuid4(),
+        learner_id=uuid4(),
+        query_text="[SYNTHETIC_TEST_CASE] technology",
+        top_interests=["Technology"],
+        age_band=2,
+    )
+
+    response = await runner.run_panel_turn(request=request, personas=[persona])
+
+    assert response.synthesized_guidance == ""
+    assert not response.fact_check_passed
+    assert len(runner.safety_client.output_calls) == 2

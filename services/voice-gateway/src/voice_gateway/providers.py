@@ -12,13 +12,10 @@ from __future__ import annotations
 
 import io
 import logging
-import time
-from typing import Any
-
 import httpx
 
 from services.config import settings
-from voice_gateway.abstractions import STTService, TTSService, LiveKitRoomManager
+from voice_gateway.abstractions import STTService, TTSService
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +23,8 @@ logger = logging.getLogger(__name__)
 class GroqSTTService(STTService):
     """
     Sub-100ms Groq Whisper API STT Service.
-    Falls back gracefully to local in-memory transcription if API key is not provided.
+    Falls back only to an injected STT provider. It never fabricates a transcript:
+    an unavailable STT dependency must stop the turn before it reaches the LLM.
     """
 
     def __init__(self, fallback_stt: STTService | None = None) -> None:
@@ -36,7 +34,7 @@ class GroqSTTService(STTService):
         if not settings.groq.api_key:
             if self.fallback_stt:
                 return await self.fallback_stt.transcribe(audio_data, language)
-            return "Namaste Vadi! I want to explore robotics and drones."
+            raise RuntimeError("No STT provider is configured")
 
         try:
             async with httpx.AsyncClient(timeout=4.0) as client:
@@ -60,16 +58,16 @@ class GroqSTTService(STTService):
                 result = response.json()
                 return result.get("text", "").strip()
         except Exception as exc:
-            logger.warn("Groq STT call failed, using fallback: %s", exc)
+            logger.warning("Groq STT call failed, using fallback: %s", exc)
             if self.fallback_stt:
                 return await self.fallback_stt.transcribe(audio_data, language)
-            return "Namaste Vadi! I want to build drones."
+            raise RuntimeError("STT provider unavailable") from exc
 
 
 class ElevenLabsTTSService(TTSService):
     """
     Ultra-Realistic Low-Latency ElevenLabs Streaming TTS Service.
-    Falls back gracefully to Kokoro / Piper TTS if API key is not provided.
+    Falls back only to an injected TTS provider. It never emits fabricated audio.
     """
 
     def __init__(self, fallback_tts: TTSService | None = None) -> None:
@@ -79,7 +77,7 @@ class ElevenLabsTTSService(TTSService):
         if not settings.elevenlabs.api_key:
             if self.fallback_tts:
                 return await self.fallback_tts.synthesize(text, language)
-            return b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x44\xac\x00\x00\x88\x58\x01\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
+            raise RuntimeError("No TTS provider is configured")
 
         try:
             url = f"https://api.elevenlabs.io/v1/text-to-speech/{settings.elevenlabs.voice_id}/stream"
@@ -103,24 +101,7 @@ class ElevenLabsTTSService(TTSService):
                 response.raise_for_status()
                 return response.content
         except Exception as exc:
-            logger.warn("ElevenLabs TTS call failed, using fallback: %s", exc)
+            logger.warning("ElevenLabs TTS call failed, using fallback: %s", exc)
             if self.fallback_tts:
                 return await self.fallback_tts.synthesize(text, language)
-            return b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x44\xac\x00\x00\x88\x58\x01\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
-
-
-class LiveKitTokenService(LiveKitRoomManager):
-    """
-    LiveKit WebRTC SFU Token & Room Join Manager.
-    Generates short-lived WebRTC room tokens for real-time streaming speech.
-    """
-
-    async def generate_token(self, room_name: str, identity: str) -> str:
-        # Generate token using LiveKit credentials
-        return f"livekit_token_{identity}_{int(time.time())}"
-
-    async def connect_session(self, session_id: str, token: str) -> Any:
-        return {"session_id": session_id, "status": "connected", "protocol": "webrtc"}
-
-    async def stream_audio_to_room(self, room_name: str, audio_data: bytes) -> None:
-        logger.info("Streamed %d audio bytes into LiveKit room %s", len(audio_data), room_name)
+            raise RuntimeError("TTS provider unavailable") from exc

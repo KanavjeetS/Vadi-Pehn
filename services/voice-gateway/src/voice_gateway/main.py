@@ -35,7 +35,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
-from voice_gateway.providers import GroqSTTService, ElevenLabsTTSService, LiveKitTokenService
+from voice_gateway.providers import ElevenLabsTTSService, GroqSTTService
 
 # Development stays hermetic; pilot/production uses the configured network services.
 if settings.is_dev:

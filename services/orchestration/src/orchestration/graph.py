@@ -452,6 +452,10 @@ class OrchestrationGraph:
         The voice pipeline owns the input safety check before calling this
         method and output safety for every sentence before TTS.
         """
+        verdict = state.safety_verdict_input or {}
+        if verdict.get("blocks_generation", True):
+            raise RuntimeError("Cannot stream an unverified or unsafe turn")
+
         memory_state = await self.retrieve_memory(state)
         panel_state = await self.detect_panel_trigger(memory_state)
         if panel_state.panel_triggered:

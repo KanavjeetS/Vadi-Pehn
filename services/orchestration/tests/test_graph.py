@@ -116,6 +116,19 @@ async def test_unsafe_input_never_calls_llm(
     assert result.incident_id is not None
 
 
+@pytest.mark.asyncio
+async def test_stream_reply_rejects_unchecked_turn(
+    safe_graph: OrchestrationGraph,
+) -> None:
+    """Streaming cannot bypass the mandatory input safety node."""
+    state = TurnState(
+        **_make_ids(), age_band=2, message_text="[SYNTHETIC_TEST_CASE] hello"
+    )
+
+    with pytest.raises(RuntimeError, match="unverified or unsafe"):
+        _ = [chunk async for chunk in safe_graph.stream_reply(state)]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # INVARIANT 2: Output safety IS called on every safe turn
 # ─────────────────────────────────────────────────────────────────────────────

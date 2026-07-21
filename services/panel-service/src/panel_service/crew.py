@@ -15,8 +15,11 @@ from typing import Any
 import jinja2
 
 from panel_service.abstractions import CrewAIRunner, FactValidationEngine
+from panel_service.curator_agent import CuratorAgent
 from panel_service.fact_validator import FactValidator
 from panel_service.models import PanelRequest, PanelResponse, ProfessionalPersona
+from panel_service.professional_agent import ProfessionalAgent
+from services.abstractions import MockSafetyClient, SafetyClient
 
 
 class CrewAIPanelRunner(CrewAIRunner):
@@ -30,9 +33,15 @@ class CrewAIPanelRunner(CrewAIRunner):
         self,
         fact_validator: FactValidationEngine | None = None,
         tts_service: Any | None = None,
+        safety_client: SafetyClient | None = None,
+        professional_agent: ProfessionalAgent | None = None,
+        curator_agent: CuratorAgent | None = None,
     ) -> None:
         self.fact_validator = fact_validator or FactValidator()
         self.tts_service = tts_service
+        self.safety_client = safety_client or MockSafetyClient()
+        self.professional_agent = professional_agent or ProfessionalAgent()
+        self.curator_agent = curator_agent or CuratorAgent()
         self._init_jinja_env()
 
     def _init_jinja_env(self) -> None:
@@ -93,11 +102,14 @@ class CrewAIPanelRunner(CrewAIRunner):
             lead_persona.code.lower(), request.age_band
         )
 
-        persona_titles = ", ".join([f"{p.title} ({p.domain})" for p in personas])
+        professional_guidance = await self.professional_agent.generate_career_guidance(
+            learner_id=request.learner_id,
+            interests=request.top_interests,
+            query=request.query_text,
+        )
         guidance_claims = [
-            f"As a panel comprising {persona_titles}, we recommend exploring hands-on projects.",
-            f"Focus on foundational subjects related to {request.query_text}.",
-            "Earn a solid academic record and build practical portfolio projects.",
+            str(professional_guidance["response"]),
+            *[str(milestone) for milestone in professional_guidance["milestones"]],
         ]
 
         if custom_prompt:
@@ -113,11 +125,32 @@ class CrewAIPanelRunner(CrewAIRunner):
             )
         )
 
-        synthesized_text = " ".join(validated_claims)
+        learner_age = {1: 9, 2: 12, 3: 15}[request.age_band]
+        curated = await self.curator_agent.curate_and_verify_context(
+            tenant_id=request.tenant_id,
+            learner_age=learner_age,
+            raw_facts=validated_claims,
+        )
+        synthesized_text = " ".join(curated["verified_facts"])
+
+        output_verdict = await self.safety_client.check_output(
+            learner_id=request.learner_id,
+            draft_reply_text=synthesized_text,
+            tenant_id=request.tenant_id,
+        )
+        if output_verdict.blocks_generation:
+            safe_fallback = "Vadi will find a safer way to explore this topic with you."
+            fallback_verdict = await self.safety_client.check_output(
+                learner_id=request.learner_id,
+                draft_reply_text=safe_fallback,
+                tenant_id=request.tenant_id,
+            )
+            synthesized_text = "" if fallback_verdict.blocks_generation else safe_fallback
+            fact_check_passed = False
 
         # 4. Optional TTS Voice Synthesis for Panel Persona (PRD §6.5)
         audio_b64: str | None = None
-        if self.tts_service:
+        if self.tts_service and synthesized_text:
             try:
                 audio_bytes = await self.tts_service.synthesize(
                     synthesized_text, language="hi"
