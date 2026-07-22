@@ -32,7 +32,10 @@ ALTER TABLE consent_records FORCE ROW LEVEL SECURITY;
 ALTER TABLE safety_incidents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE safety_incidents FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS governance_consent_tenant_isolation ON consent_records;
 CREATE POLICY governance_consent_tenant_isolation ON consent_records
     USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+
+DROP POLICY IF EXISTS governance_incident_tenant_isolation ON safety_incidents;
 CREATE POLICY governance_incident_tenant_isolation ON safety_incidents
     USING (tenant_id::text = current_setting('app.current_tenant_id', true));

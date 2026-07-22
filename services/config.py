@@ -23,11 +23,14 @@ class MemoryDBSettings(BaseSettings):
     name: str = Field("vadi_memory", alias="MEMORY_DB_NAME")
     user: str = Field("vadi_app", alias="MEMORY_DB_USER")
     password: str = Field("secret", alias="MEMORY_DB_PASSWORD")
+    dsn_override: str | None = Field(None, alias="MEMORY_DB_DSN")
     embedding_url: str = Field("http://ollama:11434", alias="MEMORY_EMBEDDING_URL")
     embedding_model: str = Field("nomic-embed-text", alias="MEMORY_EMBEDDING_MODEL")
 
     @property
     def dsn(self) -> str:
+        if self.dsn_override and self.dsn_override.strip():
+            return self.dsn_override.strip()
         return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
@@ -45,10 +48,34 @@ class GovernanceDBSettings(BaseSettings):
     name: str = Field("vadi_governance", alias="GOVERNANCE_DB_NAME")
     user: str = Field("vadi_gov_app", alias="GOVERNANCE_DB_USER")
     password: str = Field("secret", alias="GOVERNANCE_DB_PASSWORD")
+    dsn_override: str | None = Field(None, alias="GOVERNANCE_DB_DSN")
 
     @property
     def dsn(self) -> str:
+        if self.dsn_override and self.dsn_override.strip():
+            return self.dsn_override.strip()
         return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+
+class MongoDBSettings(BaseSettings):
+    """MongoDB Atlas — NoSQL Document & Telemetry Logging Store."""
+
+    uri: str = Field("mongodb://localhost:27017", alias="MONGODB_URI")
+    username: str = Field("vadi_nosql_app", alias="MONGODB_USERNAME")
+    password: str = Field("change_me_mongodb_password", alias="MONGODB_PASSWORD")
+    db_name: str = Field("vadi_nosql", alias="MONGODB_DB_NAME")
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+
+class SupabaseSettings(BaseSettings):
+    """Supabase API details and connection configuration."""
+
+    url: str = Field("https://nmpyggtpigzoxjwcsfvz.supabase.co", alias="NEXT_PUBLIC_SUPABASE_URL")
+    publishable_key: str = Field("change_me_supabase_pub_key", alias="NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY")
+    secret_key: str = Field("change_me_supabase_secret_key", alias="SUPABASE_SECRET_KEY")
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -101,6 +128,14 @@ class IngestionServiceSettings(BaseSettings):
     """Document ingestion service boundary."""
 
     url: str = Field("http://ingestion-service:8000", alias="INGESTION_SERVICE_URL")
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+
+class DashboardBFFSettings(BaseSettings):
+    """Dashboard BFF service boundary."""
+
+    url: str = Field("http://dashboard-bff:8000", alias="DASHBOARD_BFF_URL")
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -231,6 +266,7 @@ class Settings(BaseSettings):
     safety_proxy: SafetyProxySettings = SafetyProxySettings()  # type: ignore[call-arg]
     governance: GovernanceServiceSettings = GovernanceServiceSettings()  # type: ignore[call-arg]
     ingestion: IngestionServiceSettings = IngestionServiceSettings()  # type: ignore[call-arg]
+    dashboard: DashboardBFFSettings = DashboardBFFSettings()  # type: ignore[call-arg]
     langfuse: LangfuseSettings = LangfuseSettings()  # type: ignore[call-arg]
     minio: MinIOSettings = MinIOSettings()  # type: ignore[call-arg]
     auth: AuthSettings = AuthSettings()  # type: ignore[call-arg]
@@ -240,6 +276,8 @@ class Settings(BaseSettings):
     elevenlabs: ElevenLabsSettings = ElevenLabsSettings()  # type: ignore[call-arg]
     voice: VoiceSettings = VoiceSettings()  # type: ignore[call-arg]
     panel: PanelSettings = PanelSettings()  # type: ignore[call-arg]
+    mongodb: MongoDBSettings = MongoDBSettings()  # type: ignore[call-arg]
+    supabase: SupabaseSettings = SupabaseSettings()  # type: ignore[call-arg]
 
     @property
     def is_dev(self) -> bool:

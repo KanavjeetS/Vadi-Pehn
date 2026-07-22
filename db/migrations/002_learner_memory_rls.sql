@@ -46,6 +46,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_vector_hnsw
 ALTER TABLE learner_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE learner_memories FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS tenant_isolation_policy ON learner_memories;
 CREATE POLICY tenant_isolation_policy ON learner_memories
 FOR ALL
 USING (
@@ -69,6 +70,7 @@ CREATE TABLE IF NOT EXISTS learner_interest_profile (
 ALTER TABLE learner_interest_profile ENABLE ROW LEVEL SECURITY;
 ALTER TABLE learner_interest_profile FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS tenant_isolation_policy ON learner_interest_profile;
 CREATE POLICY tenant_isolation_policy ON learner_interest_profile
 FOR ALL
 USING (
