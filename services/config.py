@@ -99,6 +99,7 @@ class VLLMSettings(BaseSettings):
     classifier_timeout_seconds: float = Field(
         3.0, alias="VLLM_CLASSIFIER_TIMEOUT_SECONDS"
     )
+    nvidia_api_key: str = Field("", alias="NVIDIA_API_KEY")
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -211,6 +212,11 @@ class ElevenLabsSettings(BaseSettings):
 
     api_key: str = Field("", alias="ELEVENLABS_API_KEY")
     voice_id: str = Field("2EiwWnXFnvU5JabPnv8n", alias="ELEVENLABS_VOICE_ID")  # Indian female calm voice
+    temperature: float = Field(0.7, alias="ELEVENLABS_TEMPERATURE")
+    speed: float = Field(1.0, alias="ELEVENLABS_SPEED")
+    warmth: float = Field(0.75, alias="ELEVENLABS_WARMTH")
+    stability: float = Field(0.7, alias="ELEVENLABS_STABILITY")
+    similarity_boost: float = Field(0.75, alias="ELEVENLABS_SIMILARITY_BOOST")
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -222,7 +228,12 @@ class VoiceSettings(BaseSettings):
     whisper_url: str = Field("http://localhost:8003", alias="WHISPER_URL")
     whisper_model: str = Field("faster-distil-whisper-large-v3", alias="WHISPER_MODEL")
     kokoro_url: str = Field("http://localhost:8004", alias="KOKORO_URL")
+    kokoro_profile_hi: str = Field("hi_female", alias="KOKORO_PROFILE_HI")
     piper_path: str = Field("piper", alias="PIPER_PATH")
+    piper_model_pa: str = Field("models/pa_in.onnx", alias="PIPER_MODEL_PA")
+    temperature: float = Field(0.7, alias="VOICE_TEMPERATURE")
+    speed: float = Field(1.0, alias="VOICE_SPEED")
+    warmth: float = Field(0.75, alias="VOICE_WARMTH")
     voice_classifier_url: str = Field(
         "http://vllm-classifier-voice:8002", alias="VOICE_CLASSIFIER_URL"
     )

@@ -88,6 +88,21 @@ class ConsentLedger(ConsentLedgerEngine):
 
         return updated_record
 
+    async def summary(self, *, tenant_id: UUID | None = None) -> dict[str, bool]:
+        if not self._ledger:
+            return {
+                "conversation_storage": True,
+                "document_ingestion": True,
+                "voice_recording": True,
+                "career_introductions": True,
+            }
+        return {
+            "conversation_storage": all(r.conversation_storage for r in self._ledger.values()),
+            "document_ingestion": all(r.document_ingestion for r in self._ledger.values()),
+            "voice_recording": all(r.voice_recording for r in self._ledger.values()),
+            "career_introductions": all(r.career_introductions for r in self._ledger.values()),
+        }
+
 
 class PostgresConsentLedger(ConsentLedgerEngine):
     """Persistent governance consent ledger with transaction-local tenant RLS."""

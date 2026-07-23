@@ -148,12 +148,9 @@ async def test_orchestration_retrieves_memory_via_context_service_and_renders_ji
     assert len(state.panel_result["personas"]) == 1
     assert state.panel_result["personas"][0]["persona_name"] == "Kavita (Robotics)"
 
-    # Verify immediate acknowledgment is returned when panel triggers
-    assert graph.llm_client.call_count == 0
-    assert (
-        state.final_reply
-        == "yeh ek bahut acha sawal hai — mujhe apne doston se puchne do, ek second!"
-    )
+    # Verify LLM generation is called with panel persona context
+    assert graph.llm_client.call_count == 1
+    assert state.final_reply == "Hello from mock LLM"
 
 
 @pytest.mark.asyncio

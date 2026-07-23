@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import httpx
 import subprocess
+
+from services.config import settings
 from voice_gateway.abstractions import TTSService
 
 
@@ -47,10 +49,10 @@ class PiperTTSService(TTSService):
     """
 
     def __init__(
-        self, piper_path: str = "piper", model_path: str = "models/pa_in.onnx"
+        self, piper_path: str | None = None, model_path: str | None = None
     ) -> None:
-        self.piper_path = piper_path
-        self.model_path = model_path
+        self.piper_path = piper_path or settings.voice.piper_path
+        self.model_path = model_path or settings.voice.piper_model_pa
 
     async def synthesize(self, text: str, language: str = "pa") -> bytes:
         """
@@ -83,9 +85,10 @@ class KokoroTTSService(TTSService):
     """
 
     def __init__(
-        self, kokoro_url: str, fallback_service: PiperTTSService | None = None
+        self, kokoro_url: str | None = None, fallback_service: PiperTTSService | None = None
     ) -> None:
-        self.kokoro_url = kokoro_url.rstrip("/")
+        url = kokoro_url or settings.voice.kokoro_url
+        self.kokoro_url = url.rstrip("/")
         self.fallback_service = fallback_service or PiperTTSService()
 
     async def synthesize(self, text: str, language: str = "en") -> bytes:
@@ -98,13 +101,17 @@ class KokoroTTSService(TTSService):
             return await self.fallback_service.synthesize(text, language)
 
         try:
+            voice_profile = settings.voice.kokoro_profile_hi
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.kokoro_url}/v1/audio/speech",
                     json={
                         "input": text,
-                        "voice": "en_us_male" if language == "en" else "hi_female",
+                        "voice": voice_profile,
                         "response_format": "wav",
+                        "temperature": settings.voice.temperature,
+                        "speed": settings.voice.speed,
+                        "warmth": settings.voice.warmth,
                     },
                     timeout=2.0,  # Enforce sub-500ms budget for first chunks
                 )

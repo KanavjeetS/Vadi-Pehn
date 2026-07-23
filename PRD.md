@@ -234,9 +234,11 @@ v1 names "bilingual children" as the exact problem voice should solve, then spec
 - **Kokoro-82M's language coverage must be validated against the target language list before it is locked in as the TTS engine.** If coverage is insufficient, alternatives (e.g., a regional open-weight TTS model, or accepting Piper's lower quality for full language coverage) must be evaluated as a fallback, and this decision documented as an explicit go/no-go checkpoint in Phase 2, not assumed.
 - The main LLM's persona must be validated for natural code-switched conversation (a real bilingual child mixes languages mid-sentence) — this needs a dedicated eval set, not just a translation check.
 
-### 6.5 Accessibility Beyond Voice *(new)*
+### 6.5 Accessibility Beyond Voice & Pilot Frontend Architecture *(amended)*
 
-Voice solves literacy access but not all accessibility needs. The underlying React UI (kept as fallback/companion to voice) should still meet WCAG 2.1 AA basics — readable font sizing for low-vision users, captions for TTS audio for deaf/hard-of-hearing children, and a non-voice text-input path always available as a fallback (network conditions in under-resourced settings may not reliably support WebRTC).
+Voice solves literacy access but not all accessibility needs. For the regional Pilot MVP (`v2.0-pilot`), the client application is built using high-performance, lightweight **Vanilla HTML5, CSS3, and JavaScript (`webapp/`)** served directly via FastAPI/desktop runner (`start_desktop.py`). This ensures zero build overhead, immediate desktop/mobile accessibility, and minimal bandwidth consumption over under-resourced school/NGO networks.
+
+The underlying UI (`webapp/` Pilot and future React/Next.js PWA deferred to Phase 6) must meet WCAG 2.1 AA basics: readable font sizing for low-vision users, captions for TTS audio for deaf/hard-of-hearing children, and a non-voice text-input path always available as a fallback (network conditions in under-resourced settings may not reliably support WebRTC).
 
 ---
 

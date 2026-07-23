@@ -16,6 +16,7 @@ from memory_service.abstractions import (
     HybridRetrievalQuery,
     RerankerClient,
     ScoredMemoryItem,
+    QueryTransformer,
 )
 from memory_service.embeddings import MockEmbeddingClient, MockRerankerClient
 
@@ -38,11 +39,19 @@ class HybridRetrievalEngine:
         self._pool = pool
         self.embedding_client = embedding_client or MockEmbeddingClient()
         self.reranker_client = reranker_client or MockRerankerClient()
+        self.query_transformer: QueryTransformer | None = None
 
     async def retrieve_hybrid(
         self, query: HybridRetrievalQuery
     ) -> list[ScoredMemoryItem]:
         """Execute dense + sparse retrieval, RRF fusion, and cross-encoder reranking inside an RLS transaction."""
+        # 0. Optional Query Transformation (Expansion)
+        expanded_queries = [query.query_text]
+        if self.query_transformer:
+            expanded_queries = await self.query_transformer.transform(query.query_text)
+            
+        sparse_search_text = " OR ".join(f'"{q}"' for q in expanded_queries)
+        
         embedding_str = "[" + ",".join(str(f) for f in query.query_embedding) + "]"
 
         async with self._pool.acquire() as conn:
@@ -76,15 +85,15 @@ class HybridRetrievalEngine:
                     """
                     SELECT
                         id, tenant_id, learner_id, content, metadata, created_at,
-                        ts_rank_cd(to_tsvector('english', content), plainto_tsquery('english', $1)) AS sparse_score
+                        ts_rank_cd(to_tsvector('english', content), websearch_to_tsquery('english', $1)) AS sparse_score
                     FROM learner_memories
                     WHERE learner_id = $2
                       AND expires_at > NOW()
-                      AND to_tsvector('english', content) @@ plainto_tsquery('english', $1)
+                      AND to_tsvector('english', content) @@ websearch_to_tsquery('english', $1)
                     ORDER BY sparse_score DESC
                     LIMIT $3
                     """,
-                    query.query_text,
+                    sparse_search_text,
                     query.learner_id,
                     query.candidate_limit,
                 )

@@ -31,6 +31,24 @@ class FakeDashboardRepository:
     async def learner_count(self, tenant_id):
         return 150
 
+    async def session_count(self, tenant_id, learner_ids=None):
+        return 5
+
+    async def learner_streak(self, tenant_id, guardian_id=None):
+        return "5 days"
+
+    async def weekly_engagement(self, tenant_id, guardian_id=None):
+        return "2h 52m"
+
+    async def discrepancy_count(self, tenant_id):
+        return 0
+
+    async def total_sessions_count(self, tenant_id=None):
+        return 10
+
+    async def top_growing_skill(self, tenant_id, learner_ids=None):
+        return "World exposure"
+
 
 @pytest.fixture(autouse=True)
 def dashboard_fakes(monkeypatch: pytest.MonkeyPatch) -> None:

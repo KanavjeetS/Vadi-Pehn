@@ -69,3 +69,29 @@ class SentenceBoundaryChunker:
             chunks.append(" ".join(current_sentences))
 
         return chunks
+
+
+class HierarchicalChunker:
+    """
+    Splits text into parent document chunks and smaller child chunks.
+    Implements Hierarchical Chunking (Parent-Child retrieval strategy).
+    """
+
+    def __init__(
+        self,
+        parent_chunker: SentenceBoundaryChunker | None = None,
+        child_chunker: SentenceBoundaryChunker | None = None,
+    ) -> None:
+        self.parent_chunker = parent_chunker or SentenceBoundaryChunker(max_chunk_chars=1000, overlap_sentences=2)
+        self.child_chunker = child_chunker or SentenceBoundaryChunker(max_chunk_chars=200, overlap_sentences=0)
+
+    def chunk_hierarchical(self, text: str) -> dict[str, list[str]]:
+        """
+        Returns a dictionary mapping each parent chunk (as string) to a list of its child chunks.
+        """
+        parents = self.parent_chunker.chunk_text(text)
+        result = {}
+        for p in parents:
+            result[p] = self.child_chunker.chunk_text(p)
+        return result
+

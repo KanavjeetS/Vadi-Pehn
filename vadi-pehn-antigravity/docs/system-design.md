@@ -1,5 +1,9 @@
-# Vadi-Pehn Virtual Sibling-Mentor Platform
-## System Design Document — v1.0
+# Vadi-Pehn System Design & Architecture Specification
+## Engineering Blueprint for PRD v2.0 Production Readiness
+
+> [!IMPORTANT]
+> **Canonical Document Notice**: The authoritative, living canonical System Design document is maintained at [`/SystemDesign.md`](../../SystemDesign.md) in the repository root. This document mirrors `/SystemDesign.md` and reflects the Pilot MVP (`v2.0-pilot`) architecture (`webapp/` Vanilla JS + 9 microservices in `services/`).
+
 ### Derived from Product & Architecture Requirements Document v2.0
 
 **Purpose of this document:** the PRD says *what* the system must do and *why* (governance, safety, product behavior). This document says *how* it is built — service boundaries, data contracts, schemas, sequence flows, failure handling, deployment topology, and the exact technology decisions an engineering team would need to start writing code tomorrow. Every section here traces back to a PRD section; where this document makes a decision the PRD left open, that's called out explicitly.

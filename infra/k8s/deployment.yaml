@@ -1,29 +1,29 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vadi-agent-service
+  name: vadi-api-gateway
   labels:
-    app: vadi-agent-service
+    app: vadi-api-gateway
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: vadi-agent-service
+      app: vadi-api-gateway
   template:
     metadata:
       labels:
-        app: vadi-agent-service
+        app: vadi-api-gateway
     spec:
       containers:
-      - name: agent-service
-        image: vadi-pehn/agent-service:latest
+      - name: api-gateway
+        image: vadi-pehn/api-gateway:latest
         ports:
         - containerPort: 8000
         env:
         - name: ENVIRONMENT
           value: "production"
-        - name: OLLAMA_URL
-          value: "http://ollama-service:11434"
+        - name: ORCHESTRATION_URL
+          value: "http://vadi-orchestration:8001"
         resources:
           limits:
             cpu: "2"
@@ -35,11 +35,57 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vadi-agent-service
+  name: vadi-api-gateway
 spec:
   type: ClusterIP
   ports:
   - port: 8000
     targetPort: 8000
   selector:
-    app: vadi-agent-service
+    app: vadi-api-gateway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vadi-orchestration
+  labels:
+    app: vadi-orchestration
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vadi-orchestration
+  template:
+    metadata:
+      labels:
+        app: vadi-orchestration
+    spec:
+      containers:
+      - name: orchestration
+        image: vadi-pehn/orchestration:latest
+        ports:
+        - containerPort: 8001
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: OLLAMA_URL
+          value: "http://ollama-service:11434"
+        resources:
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vadi-orchestration
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8001
+    targetPort: 8001
+  selector:
+    app: vadi-orchestration

@@ -100,3 +100,15 @@ class ConsentCheckerClient(abc.ABC):
     ) -> bool:
         """Return True if learner has active consent for memory_storage, False if revoked/absent."""
         ...
+
+
+class QueryTransformer(abc.ABC):
+    """
+    Abstract base class for query rewriting and multi-query expansion.
+    """
+
+    @abc.abstractmethod
+    async def transform(self, query: str) -> list[str]:
+        """Rewrite and expand a query, returning a list of search queries."""
+        ...
+

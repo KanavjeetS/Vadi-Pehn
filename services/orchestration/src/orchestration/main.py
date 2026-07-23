@@ -30,7 +30,12 @@ from memory_service.embeddings import NomicEmbeddingClient  # noqa: E402
 from memory_service.retrieval import HybridRetrievalEngine  # noqa: E402
 from memory_service.store import PostgresMemoryStore  # noqa: E402
 from memory_service.write_pipeline import AsyncMemoryWriter  # noqa: E402
+from services.abstractions import InMemoryVectorStore  # noqa: E402
 from services.config import require_internal_service_token, settings  # noqa: E402
+from services.logging_config import configure_logging  # noqa: E402
+
+configure_logging("orchestration")
+
 from orchestration.graph import (  # noqa: E402
     HttpGovernanceIncidentClient,
     OrchestrationGraph,
@@ -77,6 +82,19 @@ pool: asyncpg.Pool | None = None
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     global graph, pool
+    if settings.is_dev:
+        graph = OrchestrationGraph(
+            safety_client=NeMoSafetyClient(),
+            memory_store=InMemoryVectorStore(),
+            llm_client=SafetyProxyLLMClient(),
+            governance_client=HttpGovernanceIncidentClient(),
+        )
+        try:
+            yield
+        finally:
+            graph = None
+        return
+
     pool = await asyncpg.create_pool(settings.memory_db.dsn, min_size=1, max_size=10)
     embedding_client = NomicEmbeddingClient(
         base_url=settings.memory_db.embedding_url,
@@ -98,8 +116,9 @@ async def lifespan(_: FastAPI):
         yield
     finally:
         graph = None
-        await pool.close()
-        pool = None
+        if pool:
+            await pool.close()
+            pool = None
 
 
 app = FastAPI(title="Vadi-Pehn Orchestration", version="0.2.0", lifespan=lifespan)

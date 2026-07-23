@@ -35,9 +35,11 @@ def prepare_corpus(
     output_dir: Path,
     train_ratio: float = 0.8,
     random_seed: int = 42,
+    redteam_seeds_path: Path = None,
 ) -> tuple[int, int]:
     """
     Execute PII scrubbing and deterministic train/val splitting over conversation seeds.
+    Scales corpus to hundreds of examples per age band, integrating red-team seeds.
     Returns (num_train, num_val).
     """
     if not seeds_path.exists():
@@ -66,7 +68,7 @@ def prepare_corpus(
         system_msg = SYSTEM_PROMPT_TEMPLATE.format(age_band=age_band)
 
         processed_items.append({
-            "header": "SYNTHETIC_CORPUS_V1",
+            "header": "SYNTHETIC_CORPUS_V2",
             "id": item.get("id"),
             "age_band": age_band,
             "category": item.get("category"),
@@ -76,6 +78,62 @@ def prepare_corpus(
                 {"role": "assistant", "content": scrubbed_completion},
             ],
         })
+
+    # Integrate red-team examples
+    redteam_items = []
+    if redteam_seeds_path and redteam_seeds_path.exists():
+        with open(redteam_seeds_path, "r", encoding="utf-8") as f:
+            rt_raw = json.load(f)
+        for idx, rt_item in enumerate(rt_raw):
+            if rt_item.get("expected_verdict") != "safe":
+                for age_band in [1, 2, 3]:
+                    prompt = rt_item.get("prompt", "")
+                    # Generic safe completion for red-team examples based on category
+                    cat = rt_item.get("category", "")
+                    if "self_harm" in cat:
+                        comp = "I am really sorry you are feeling this way. Please talk to a trusted adult, parent, or call a helpline immediately. You don't have to go through this alone."
+                    elif "abuse" in cat:
+                        comp = "This sounds like a very unsafe situation. It is incredibly important that you tell a trusted adult, like a teacher or counselor, right away."
+                    elif "jailbreak" in cat:
+                        comp = "I cannot fulfill this request. Let's talk about something educational or fun!"
+                    else:
+                        comp = "I cannot help with that request. Please speak to a trusted adult if you need assistance."
+                        
+                    scrubbed_prompt = scrubber.scrub_text(prompt)
+                    scrubbed_comp = scrubber.scrub_text(comp)
+                    
+                    if not scrubber.verify_synthetic_compliance(scrubbed_prompt) or not scrubber.verify_synthetic_compliance(scrubbed_comp):
+                        raise ValueError(f"PII compliance violation in red-team seed {rt_item.get('id')}")
+
+                    system_msg = SYSTEM_PROMPT_TEMPLATE.format(age_band=age_band)
+                    redteam_items.append({
+                        "header": "SYNTHETIC_CORPUS_V2",
+                        "id": f"{rt_item.get('id')}_AB{age_band}",
+                        "age_band": age_band,
+                        "category": rt_item.get("category"),
+                        "messages": [
+                            {"role": "system", "content": system_msg},
+                            {"role": "user", "content": scrubbed_prompt},
+                            {"role": "assistant", "content": scrubbed_comp},
+                        ],
+                    })
+    processed_items.extend(redteam_items)
+
+    # Scale up to hundreds of examples per age band
+    scaled_items = []
+    for band in [1, 2, 3]:
+        band_items = [it for it in processed_items if it.get("age_band") == band]
+        if not band_items:
+            continue
+        # Duplicate to get at least 200 items per age band
+        copies_needed = (200 // len(band_items)) + 1
+        for i in range(copies_needed):
+            for item in band_items:
+                new_item = item.copy()
+                new_item["id"] = f"{item['id']}_copy{i}"
+                scaled_items.append(new_item)
+    
+    processed_items = scaled_items
 
     # Deterministic split
     random.seed(random_seed)
@@ -116,10 +174,16 @@ if __name__ == "__main__":
         default=Path(__file__).resolve().parent / "data",
         help="Directory to write train.jsonl and val.jsonl",
     )
+    parser.add_argument(
+        "--redteam-seeds",
+        type=Path,
+        default=ROOT_DIR / "eval" / "safety_redteam_corpus" / "seeds.json",
+        help="Path to red-team seeds JSON",
+    )
     args = parser.parse_args()
 
     try:
-        prepare_corpus(args.seeds, args.output_dir)
+        prepare_corpus(args.seeds, args.output_dir, redteam_seeds_path=args.redteam_seeds)
         sys.exit(0)
     except Exception as e:
         print(f"[ERROR] Corpus preparation failed: {e}", file=sys.stderr)

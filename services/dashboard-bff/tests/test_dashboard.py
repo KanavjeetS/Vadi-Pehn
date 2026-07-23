@@ -3,6 +3,7 @@ Unit and Integration Tests for Guardian Dashboard BFF (Phase 8).
 Verifies:
   1. Guardian surface overview & RLS scoping headers
   2. Admin incident triage overview
+  3. Dynamic observability metrics & security access control
 """
 
 from __future__ import annotations
@@ -57,11 +58,78 @@ def test_admin_overview_endpoint() -> None:
     assert res.status_code == 200
     data = res.json()
     assert data["tenant_id"] == tenant_id
-    assert data["total_learners"] == 150
+    assert isinstance(data["total_learners"], int)
     assert len(data["recent_incidents"]) == 1
+    assert isinstance(data["active_traces"], int)
+    assert isinstance(data["safety_pass_rate"], (int, float))
+    assert isinstance(data["service_latencies"], dict)
+    assert isinstance(data["trace_summaries"], list)
+    assert isinstance(data["system_health_logs"], list)
 
 
-def test_learner_token_cannot_access_guardian_bff():
+def test_dashboard_x_request_id_middleware() -> None:
+    res = client.get("/health")
+    assert res.status_code == 200
+    assert "X-Request-ID" in res.headers
+
+    custom_id = "dashboard-req-999"
+    res_custom = client.get("/health", headers={"X-Request-ID": custom_id})
+    assert res_custom.status_code == 200
+    assert res_custom.headers.get("X-Request-ID") == custom_id
+
+
+def test_admin_observability_metrics_endpoint() -> None:
+    tenant_id = str(uuid4())
+    token = create_jwt_token(user_id=str(uuid4()), tenant_id=tenant_id, role="admin")
+    res = client.get(
+        "/api/v1/admin/observability/metrics",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert isinstance(data["active_traces"], int)
+    assert isinstance(data["safety_triggers"], dict)
+    assert isinstance(data["safety_triggers"]["safe_pass_rate"], (int, float))
+    assert isinstance(data["service_latencies"], dict)
+    assert isinstance(data["trace_count_hourly"], list)
+
+
+def test_admin_observability_unauthenticated_returns_401() -> None:
+    res = client.get("/api/v1/admin/observability/metrics")
+    assert res.status_code == 401
+
+
+def test_admin_observability_header_spoofing_rejected() -> None:
+    res = client.get(
+        "/api/v1/admin/observability/metrics",
+        headers={"X-User-Role": "admin"},
+    )
+    assert res.status_code == 401
+
+
+def test_admin_observability_non_admin_role_rejected() -> None:
+    token = create_jwt_token(
+        user_id=str(uuid4()), tenant_id=str(uuid4()), role="guardian"
+    )
+    res = client.get(
+        "/api/v1/admin/observability/metrics",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 403
+
+
+def test_admin_observability_valid_admin_jwt_accepted() -> None:
+    token = create_jwt_token(
+        user_id=str(uuid4()), tenant_id=str(uuid4()), role="admin"
+    )
+    res = client.get(
+        "/api/v1/admin/observability/metrics",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+
+
+def test_learner_token_cannot_access_guardian_bff() -> None:
     token = create_jwt_token(
         user_id=str(uuid4()), tenant_id=str(uuid4()), role="learner"
     )
@@ -71,7 +139,7 @@ def test_learner_token_cannot_access_guardian_bff():
     assert res.status_code == 403
 
 
-def test_header_only_bff_request_is_unauthorized():
+def test_header_only_bff_request_is_unauthorized() -> None:
     res = client.get(
         "/api/v1/guardian/overview",
         headers={"X-Tenant-ID": str(uuid4()), "X-Guardian-ID": str(uuid4())},

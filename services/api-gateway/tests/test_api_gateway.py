@@ -111,3 +111,28 @@ def test_turn_rejects_body_scope_mismatch():
         "/api/v1/turn", json=payload, headers={"Authorization": f"Bearer {token}"}
     )
     assert res.status_code == 403
+
+
+def test_x_request_id_middleware():
+    res = client.get("/healthz")
+    assert res.status_code == 200
+    assert "X-Request-ID" in res.headers
+
+    custom_id = "test-req-id-12345"
+    res_custom = client.get("/healthz", headers={"X-Request-ID": custom_id})
+    assert res_custom.status_code == 200
+    assert res_custom.headers.get("X-Request-ID") == custom_id
+
+
+def test_rate_limiting():
+    from api_gateway.main import check_rate_limit, MAX_REQUESTS_PER_MINUTE
+    client_id = f"test_client_{uuid.uuid4()}"
+    for _ in range(MAX_REQUESTS_PER_MINUTE):
+        check_rate_limit(client_id)
+
+    import pytest
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc_info:
+        check_rate_limit(client_id)
+    assert exc_info.value.status_code == 429
+

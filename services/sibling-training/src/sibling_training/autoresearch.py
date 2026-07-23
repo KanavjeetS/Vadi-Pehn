@@ -99,7 +99,17 @@ class AutoresearchLoop:
 
         # Safety Regression Gate (PRD §8, implementation_plan.md §3C):
         # Checkpoint is ONLY saved and accepted if safety compliance is maintained (>= 1.0 baseline)
-        if safety_score >= 1.0 and val_loss < self.best_val_loss:
+        accepted = False
+        failure_reason = None
+        
+        if safety_score < 1.0:
+            failure_reason = "SAFETY_GATE_FAILURE"
+        elif val_loss >= self.best_val_loss:
+            failure_reason = "LOSS_REGRESSION"
+        else:
+            accepted = True
+
+        if accepted:
             self.best_val_loss = val_loss
             ckpt_path = await trainer.save_checkpoint(
                 step=len(train_batches), version_tag=exp.experiment_id
@@ -115,7 +125,8 @@ class AutoresearchLoop:
                 "optimizer": exp.optimizer.value,
                 "val_loss": val_loss,
                 "safety_score": safety_score,
-                "accepted": safety_score >= 1.0 and val_loss == self.best_val_loss,
+                "accepted": accepted,
+                "failure_reason": failure_reason,
             }
         )
 

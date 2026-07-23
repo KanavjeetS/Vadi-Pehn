@@ -1,6 +1,9 @@
 # Vadi-Pehn Virtual Sibling-Mentor Platform
 ## Product & Architecture Requirements Document — Version 2.0
 
+> [!IMPORTANT]
+> **Canonical Document Notice**: The authoritative, living canonical PRD is maintained at [`/PRD.md`](../../PRD.md) in the repository root. This document mirrors `/PRD.md` and reflects the Pilot MVP (`v2.0-pilot`) architecture using Vanilla JS/HTML5 (`webapp/`) with React/Next.js PWA deferred to Phase 6.
+
 **Status:** Refined from v1 architectural blueprint. This revision closes governance, safety-of-relationship, capacity-planning, and operational gaps required before this system can responsibly serve minors in production.
 
 **Scoring:** v1 was self-assessed at 8.2/10 against a stated 9.8/10 target, with three gaps named (voice UX, safety gateway, vector overfiltering). This revision closes those three **and** eleven additional gaps that are non-negotiable for a child-facing product: consent and legal compliance, data lifecycle, emotional-safety-of-the-relationship-itself, escalation delivery, multilingual coverage, capacity math, security hardening, testing strategy, observability completeness, guardian/admin product surface, cost model, a corrected code defect, an API contract layer, and a risk register. Target: **9.8/10**, with the remaining 0.2 intentionally held back for outcomes only a regional pilot can validate (real-world rapport calibration, on-the-ground reviewer staffing, in-market language quality).

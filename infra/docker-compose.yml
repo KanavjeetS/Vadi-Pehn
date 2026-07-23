@@ -53,38 +53,98 @@ services:
     volumes:
       - ollama_models:/root/.ollama
 
-  # 5. Core API Service (Service A)
-  core-api:
+  # 5. API Gateway Service (Main BFF & Router)
+  api-gateway:
     build:
       context: ..
-      dockerfile: apps/core-api/Dockerfile
-    container_name: vadi-core-api
-    ports:
-      - "8001:8001"
-    environment:
-      - ENVIRONMENT=production
-      - MEMORY_DB_HOST=postgres-memory
-      - GOVERNANCE_DB_HOST=postgres-governance
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      - postgres-memory
-      - postgres-governance
-      - redis
-
-  # 6. Agent Orchestration Service (Service B)
-  agent-service:
-    build:
-      context: ..
-      dockerfile: apps/agent-service/Dockerfile
-    container_name: vadi-agent-service
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: vadi-api-gateway
     ports:
       - "8000:8000"
     environment:
       - ENVIRONMENT=production
       - MEMORY_DB_HOST=postgres-memory
+      - GOVERNANCE_DB_HOST=postgres-governance
+      - REDIS_URL=redis://redis:6379/0
+      - ORCHESTRATION_URL=http://orchestration:8001
+      - VOICE_GATEWAY_URL=http://voice-gateway:8002
+      - GOVERNANCE_SERVICE_URL=http://governance-service:8003
+    depends_on:
+      - postgres-memory
+      - postgres-governance
+      - redis
+      - orchestration
+
+  # 6. Orchestration Service (LangGraph Core & Memory)
+  orchestration:
+    build:
+      context: ..
+      dockerfile: services/orchestration/Dockerfile
+    container_name: vadi-orchestration
+    ports:
+      - "8001:8001"
+    environment:
+      - ENVIRONMENT=production
+      - MEMORY_DB_HOST=postgres-memory
+      - REDIS_URL=redis://redis:6379/0
       - OLLAMA_URL=http://ollama:11434
     depends_on:
       - postgres-memory
+      - ollama
+      - redis
+
+  # 7. Voice Gateway Service (LiveKit, Groq, ElevenLabs, VAD)
+  voice-gateway:
+    build:
+      context: ..
+      dockerfile: services/voice-gateway/Dockerfile
+    container_name: vadi-voice-gateway
+    ports:
+      - "8002:8002"
+    environment:
+      - ENVIRONMENT=production
+      - ORCHESTRATION_URL=http://orchestration:8001
+    depends_on:
+      - orchestration
+
+  # 8. Governance Service (Consent Ledger & 15-Min SLA Incidents)
+  governance-service:
+    build:
+      context: ..
+      dockerfile: services/governance-service/Dockerfile
+    container_name: vadi-governance-service
+    ports:
+      - "8003:8003"
+    environment:
+      - ENVIRONMENT=production
+      - GOVERNANCE_DB_HOST=postgres-governance
+    depends_on:
+      - postgres-governance
+
+  # 9. Safety Proxy (NeMo Guardrails & Aegis Fail-Closed Proxy)
+  safety-proxy:
+    build:
+      context: ..
+      dockerfile: services/safety-proxy/Dockerfile
+    container_name: vadi-safety-proxy
+    ports:
+      - "8080:8080"
+    environment:
+      - ENVIRONMENT=production
+      - SAFETY_PROXY_TIMEOUT_SECONDS=3.0
+
+  # 10. Panel Service (CrewAI Career Mentor MoE)
+  panel-service:
+    build:
+      context: ..
+      dockerfile: services/panel-service/Dockerfile
+    container_name: vadi-panel-service
+    ports:
+      - "8005:8005"
+    environment:
+      - ENVIRONMENT=production
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
       - ollama
 
 volumes:

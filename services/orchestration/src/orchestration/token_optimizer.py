@@ -7,7 +7,6 @@ while maintaining safety instructions and core memory facts.
 from __future__ import annotations
 
 import re
-from typing import Any
 
 
 class TokenOptimizer:

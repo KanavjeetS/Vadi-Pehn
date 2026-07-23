@@ -6,7 +6,7 @@
     <title>Vadi-Pehn — Guardian Governance Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -21,7 +21,8 @@
             --emerald: #10b981;
             --amber: #f59e0b;
             --red: #ef4444;
-            --font-main: 'Plus Jakarta Sans', sans-serif;
+            --cyan: #00bbf9;
+            --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -58,20 +59,22 @@
         }
 
         .brand-logo-icon {
-            width: 36px;
-            height: 36px;
-            background: var(--brand-primary);
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, var(--brand-primary) 0%, #ec4899 100%);
             color: #fff;
-            border-radius: 10px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
+            font-size: 20px;
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
         }
 
-        .brand-title-group strong { display: block; font-size: 16px; color: var(--text-dark); }
-        .brand-title-group span { font-size: 12px; color: var(--text-muted); }
+        .brand-title-group strong { display: block; font-size: 16px; color: var(--text-dark); font-weight: 800; }
+        .brand-title-group span { font-size: 12px; color: var(--text-muted); font-weight: 500; }
 
+        /* Learner Profile Card */
         .profile-card {
             background: #f1f5f9;
             border: 1px solid var(--border-color);
@@ -84,19 +87,19 @@
         }
 
         .profile-avatar {
-            width: 38px;
-            height: 38px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            background: #0ea5e9;
+            background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);
             color: #fff;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 700;
-            font-size: 15px;
+            font-weight: 800;
+            font-size: 16px;
         }
 
-        .profile-info strong { display: block; font-size: 13px; color: var(--text-dark); }
+        .profile-info strong { display: block; font-size: 13px; color: var(--text-dark); font-weight: 700; }
         .profile-info span { font-size: 11px; color: var(--text-muted); }
 
         .nav-menu {
@@ -132,6 +135,11 @@
         .nav-item-btn.active {
             background: var(--brand-primary-light);
             color: var(--brand-primary);
+        }
+
+        .nav-item-btn:focus-visible {
+            outline: 2px solid var(--cyan);
+            outline-offset: 2px;
         }
 
         .nav-footer {
@@ -196,6 +204,7 @@
             color: var(--text-dark);
             padding: 10px 20px;
             border-radius: 12px;
+            font-family: var(--font-main);
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
@@ -209,6 +218,11 @@
         .action-btn-header:hover {
             border-color: #cbd5e1;
             transform: translateY(-1px);
+        }
+
+        .action-btn-header:focus-visible {
+            outline: 2px solid var(--cyan);
+            outline-offset: 2px;
         }
 
         /* Cards & Grids */
@@ -234,6 +248,7 @@
             border: 1px solid var(--border-color);
             border-radius: 20px;
             padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.02);
         }
 
         .stat-header {
@@ -242,7 +257,9 @@
             gap: 8px;
             color: var(--text-muted);
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             margin-bottom: 12px;
         }
 
@@ -266,7 +283,7 @@
             gap: 24px;
         }
 
-        .chart-container { width: 100%; height: 240px; position: relative; }
+        .chart-container { width: 100%; height: 250px; position: relative; }
 
         /* Consent Toggles List */
         .consent-item-row {
@@ -286,8 +303,8 @@
         .switch {
             position: relative;
             display: inline-block;
-            width: 48px;
-            height: 26px;
+            width: 50px;
+            height: 28px;
         }
 
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -297,20 +314,21 @@
             cursor: pointer;
             inset: 0;
             background-color: #cbd5e1;
-            transition: .3s;
+            transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
             border-radius: 34px;
         }
 
         .slider:before {
             position: absolute;
             content: "";
-            height: 18px;
-            width: 18px;
+            height: 20px;
+            width: 20px;
             left: 4px;
             bottom: 4px;
             background-color: white;
-            transition: .3s;
+            transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
             border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
         }
 
         input:checked + .slider { background-color: var(--brand-primary); }
@@ -343,7 +361,7 @@
         }
 
         .progress-bar-fill {
-            background: var(--brand-primary);
+            background: linear-gradient(90deg, var(--brand-primary) 0%, var(--cyan) 100%);
             height: 100%;
             border-radius: 10px;
         }
@@ -405,10 +423,10 @@
         </a>
 
         <div class="profile-card">
-            <div class="profile-avatar">A</div>
+            <div class="profile-avatar" id="sidebar-learner-avatar">A</div>
             <div class="profile-info">
-                <strong>Aria, age 11</strong>
-                <span>Active 14 min ago</span>
+                <strong id="sidebar-learner-name">Aria, age 11</strong>
+                <span id="sidebar-learner-status">Active 14 min ago</span>
             </div>
         </div>
 
@@ -442,25 +460,25 @@
             <section class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-header"><div class="stat-icon">🕒</div><span>Time with mentor</span></div>
-                    <div class="stat-val">2h 52m</div>
+                    <div class="stat-val" id="stat-engagement">2h 52m</div>
                     <div class="stat-sub">+38m vs last week</div>
                 </div>
 
                 <div class="stat-card">
                     <div class="stat-header"><div class="stat-icon">🔥</div><span>Current streak</span></div>
-                    <div class="stat-val">5 days</div>
+                    <div class="stat-val" id="stat-streak">5 days</div>
                     <div class="stat-sub">Longest yet</div>
                 </div>
 
                 <div class="stat-card">
                     <div class="stat-header"><div class="stat-icon">😊</div><span>Most common mood</span></div>
-                    <div class="stat-val">Curious</div>
+                    <div class="stat-val" id="stat-mood">Curious</div>
                     <div class="stat-sub">Up from calm</div>
                 </div>
 
                 <div class="stat-card">
                     <div class="stat-header"><div class="stat-icon">📈</div><span>Top growing skill</span></div>
-                    <div class="stat-val">World exposure</div>
+                    <div class="stat-val" id="stat-skill">World exposure</div>
                     <div class="stat-sub">+9 this month</div>
                 </div>
             </section>
@@ -473,8 +491,8 @@
                 </div>
 
                 <div class="card">
-                    <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">Mood trend</h3>
-                    <p style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">Tone across the last 6 weeks.</p>
+                    <h3 style="font-size:18px; font-weight:700; margin-bottom:4px;">Mood & Topic Distribution</h3>
+                    <p style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">Explored domains across sessions.</p>
                     <div class="chart-container"><canvas id="moodChart"></canvas></div>
                 </div>
             </section>
@@ -497,7 +515,7 @@
                         <div class="c-title">Conversational Memory Retention</div>
                         <div class="c-desc">Store episodic memory vector embeddings for 18 months for personalized rapport.</div>
                     </div>
-                    <label class="switch"><input type="checkbox" checked onchange="toggleConsent('memory', this.checked)"><span class="slider"></span></label>
+                    <label class="switch"><input type="checkbox" id="consent-memory" checked onchange="toggleConsent('conversation_storage', this.checked)"><span class="slider"></span></label>
                 </div>
 
                 <div class="consent-item-row">
@@ -505,7 +523,7 @@
                         <div class="c-title">Document & Report Card Ingestion</div>
                         <div class="c-desc">Extract grades and teacher notes via olmOCR to tailor mentorship advice.</div>
                     </div>
-                    <label class="switch"><input type="checkbox" checked onchange="toggleConsent('ocr', this.checked)"><span class="slider"></span></label>
+                    <label class="switch"><input type="checkbox" id="consent-ocr" checked onchange="toggleConsent('document_ingestion', this.checked)"><span class="slider"></span></label>
                 </div>
 
                 <div class="consent-item-row">
@@ -513,7 +531,7 @@
                         <div class="c-title">Live Voice Stream Processing</div>
                         <div class="c-desc">Process WebRTC audio for Kokoro speech synthesis (zero raw audio retention).</div>
                     </div>
-                    <label class="switch"><input type="checkbox" checked onchange="toggleConsent('voice', this.checked)"><span class="slider"></span></label>
+                    <label class="switch"><input type="checkbox" id="consent-voice" checked onchange="toggleConsent('voice_recording', this.checked)"><span class="slider"></span></label>
                 </div>
 
                 <div class="consent-item-row">
@@ -521,16 +539,16 @@
                         <div class="c-title">Career Mentors Handoff</div>
                         <div class="c-desc">Allow Vadi to introduce simulated guest mentors (e.g. Engineer Pri, Dr. Maya).</div>
                     </div>
-                    <label class="switch"><input type="checkbox" checked onchange="toggleConsent('panel', this.checked)"><span class="slider"></span></label>
+                    <label class="switch"><input type="checkbox" id="consent-panel" checked onchange="toggleConsent('career_introductions', this.checked)"><span class="slider"></span></label>
                 </div>
             </div>
 
             <div class="card">
                 <h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">Your Data Rights</h3>
-                <div style="display:flex; gap:16px;">
-                    <button class="action-btn-header" onclick="alert('Export requested! A plain-language summary will be prepared.')">📥 Request Data Copy</button>
-                    <button class="action-btn-header" onclick="alert('Downloading JSON data archive...')">📄 Download JSON</button>
-                    <button class="action-btn-header" style="color:var(--red); border-color:var(--red);" onclick="confirm('Are you sure you want to permanently erase all learner data?') && alert('Data erasure job queued.')">🗑️ Erase Everything</button>
+                <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                    <button class="action-btn-header" onclick="requestDataExport()">📥 Request Data Copy</button>
+                    <button class="action-btn-header" onclick="downloadJsonArchive()">📄 Download JSON Archive</button>
+                    <button class="action-btn-header" style="color:var(--red); border-color:var(--red);" onclick="requestDataErasure()">🗑️ Erase Everything</button>
                 </div>
             </div>
         </div>
@@ -548,7 +566,7 @@
                 <div style="font-size:36px; margin-bottom:12px;">☁️</div>
                 <h3 style="font-size:18px; font-weight:700; margin-bottom:6px;">Drag a file here, or click to browse</h3>
                 <p style="font-size:14px; color:var(--text-muted);">Supports PDF, PNG, or JPG report cards.</p>
-                <input type="file" id="file-input" style="display:none;" onchange="simulateUpload(this)">
+                <input type="file" id="file-input" style="display:none;" onchange="handleFileUpload(this)">
             </div>
 
             <div class="card" style="margin-top:28px;">
@@ -641,7 +659,7 @@
             <div class="card">
                 <h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">Daily Session Cap Settings</h3>
                 <div style="display:flex; align-items:center; gap:16px;">
-                    <label style="font-size:14px; font-weight:600;">Max Turns Per Day:</label>
+                    <label style="font-size:14px; font-weight:600;" for="turn-cap-select">Max Turns Per Day:</label>
                     <select id="turn-cap-select" style="padding:8px 16px; border-radius:12px; border:1px solid var(--border-color); font-size:14px;">
                         <option value="15">15 Turns / Day</option>
                         <option value="20" selected>20 Turns / Day (Recommended)</option>
@@ -650,9 +668,11 @@
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card" id="incidents-card">
                 <h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">15-Minute SLA Incident Queue</h3>
-                <p style="font-size:14px; color:var(--text-muted);">Zero active safety alerts. Aegis 2.0 safety proxy is actively screening turns.</p>
+                <div id="incidents-list">
+                    <p style="font-size:14px; color:var(--text-muted);">Zero active safety alerts. Aegis 2.0 safety proxy is actively screening turns.</p>
+                </div>
             </div>
         </div>
 
@@ -660,66 +680,12 @@
 
     <div class="bolt-tag">⚡ Vadi-Pehn</div>
 
+    <script src="guardian.js"></script>
     <script>
-        // Tab switching logic
-        function switchTab(tabId) {
-            document.querySelectorAll('.view-pane').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.nav-item-btn').forEach(el => el.classList.remove('active'));
-
-            const activeView = document.getElementById(`view-${tabId}`);
-            if (activeView) activeView.classList.add('active');
-
-            const activeBtn = Array.from(document.querySelectorAll('.nav-item-btn')).find(btn => btn.getAttribute('onclick')?.includes(tabId));
-            if (activeBtn) activeBtn.classList.add('active');
-        }
-
-        async function toggleConsent(type, isGranted) {
-            const token = sessionStorage.getItem('vadi_access_token');
-            try {
-                if (token) {
-                    await fetch('/api/v1/guardian/consent', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify({
-                            tenant_id: sessionStorage.getItem('vadi_tenant_id') || '00000000-0000-0000-0000-000000000001',
-                            guardian_id: sessionStorage.getItem('vadi_guardian_id') || '00000000-0000-0000-0000-000000000002',
-                            consent_type: type,
-                            granted: isGranted
-                        })
-                    });
-                }
-            } catch (e) {
-                console.warn('Consent update fallback handled.');
-            }
-        }
-
-        function simulateUpload(input) {
-            if (input.files && input.files[0]) {
-                const list = document.getElementById('upload-list');
-                const file = input.files[0];
-                const div = document.createElement('div');
-                div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-color);";
-                div.innerHTML = `
-                    <div>
-                        <strong>${file.name}</strong>
-                        <div style="font-size:12px; color:var(--text-muted);">Uploaded just now • Reconciling grades...</div>
-                    </div>
-                    <span style="background:#fef08a; color:#b45309; padding:4px 12px; border-radius:12px; font-size:12px; font-weight:700;">Processing</span>
-                `;
-                list.prepend(div);
-                setTimeout(() => {
-                    div.querySelector('span').innerText = "Reconciled";
-                    div.querySelector('span').style.background = "#d1fae5";
-                    div.querySelector('span').style.color = "#10b981";
-                }, 2000);
-            }
-        }
-
-        // Initialize Charts
+        // Initialize Charts & Overview
         window.addEventListener('DOMContentLoaded', () => {
+            fetchGuardianOverview();
+
             const engCtx = document.getElementById('engagementChart').getContext('2d');
             const engGrad = engCtx.createLinearGradient(0, 0, 0, 200);
             engGrad.addColorStop(0, 'rgba(124, 58, 237, 0.35)');
@@ -736,7 +702,8 @@
                         fill: true,
                         backgroundColor: engGrad,
                         tension: 0.45,
-                        pointRadius: 0
+                        pointRadius: 4,
+                        pointBackgroundColor: '#7c3aed'
                     }]
                 },
                 options: {
@@ -752,23 +719,21 @@
 
             const moodCtx = document.getElementById('moodChart').getContext('2d');
             new Chart(moodCtx, {
-                type: 'bar',
+                type: 'doughnut',
                 data: {
-                    labels: ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4', 'Wk 5', 'Wk 6'],
-                    datasets: [
-                        { label: 'Calm', data: [60, 50, 48, 58, 62, 70], backgroundColor: '#38bdf8' },
-                        { label: 'Curious', data: [25, 35, 36, 30, 28, 22], backgroundColor: '#a78bfa' },
-                        { label: 'Tired', data: [15, 15, 16, 12, 10, 8], backgroundColor: '#fef08a' }
-                    ]
+                    labels: ['Curious (45%)', 'Calm (30%)', 'STEM/Robotics (15%)', 'Creative Arts (10%)'],
+                    datasets: [{
+                        data: [45, 30, 15, 10],
+                        backgroundColor: ['#7c3aed', '#00bbf9', '#10b981', '#ec4899'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { stacked: true, grid: { display: false }, ticks: { color: '#94a3b8' } },
-                        y: { stacked: true, grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8' }, max: 100 }
-                    }
+                    plugins: { legend: { position: 'bottom', labels: { color: '#475569', font: { size: 11 } } } },
+                    cutout: '70%'
                 }
             });
         });

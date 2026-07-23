@@ -92,6 +92,8 @@ def test_benchmark_report_is_explicitly_labelled(tmp_path):
         hybrid_hits=1,
         dense_recall_at_k=0.0,
         hybrid_recall_at_k=1.0,
+        dense_mrr=0.0,
+        hybrid_mrr=1.0,
         hybrid_wins=True,
     )
 

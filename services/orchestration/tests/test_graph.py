@@ -317,3 +317,99 @@ async def test_ai_identity_disclosure(safe_graph: OrchestrationGraph) -> None:
     res_state = TurnState(**result)
     assert res_state.ai_disclosure_added is True
     assert "main ek ai mentor hoon" in res_state.draft_reply.lower()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INVARIANT 9: Memory Reads & Recency Fallback (LIMIT 5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_recency_memory_retrieval_fallback() -> None:
+    """Verify LIMIT 5 recency-based query fallback populates memory_context when embedding client is unavailable."""
+    store = InMemoryVectorStore()
+    tenant_id = uuid.uuid4()
+    learner_id = uuid.uuid4()
+
+    # Pre-populate 6 memory chunks
+    for i in range(6):
+        await store.write(
+            tenant_id=tenant_id,
+            learner_id=learner_id,
+            content=f"Child: Memory turn {i}\nVadi: Reply {i}",
+            embedding=[0.0] * 1536,
+        )
+
+    graph = OrchestrationGraph(
+        safety_client=MockSafetyClient(),
+        memory_store=store,
+        llm_client=MockLLMClient(reply="Test response"),
+        embedding_client=None,  # Unavailable embedding client
+        context_service=None,
+    )
+
+    result = await graph.run_turn(
+        session_id=str(uuid.uuid4()),
+        tenant_id=str(tenant_id),
+        learner_id=str(learner_id),
+        age_band=2,
+        message_text="Hello, do you remember me?",
+    )
+
+    # Should have fallback memory context populated with LIMIT 5 chunks
+    assert len(result.memory_context) == 5
+    assert "Memory turn 5" in result.memory_context[-1]["content"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INVARIANT 10: Career Panel Template Rendering
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_career_panel_jinja_persona_rendering() -> None:
+    """When panel_triggered=True, graph renders matching career persona template into prompt context."""
+    for career_topic, expected_keyword in [
+        ("I want to become a doctor", "Dr. Ananya"),
+        ("engineer banna chahta hoon", "Rahul Bhaiya"),
+        ("I want to be an artist and painter", "Maya Didi"),
+    ]:
+        graph = OrchestrationGraph(
+            safety_client=MockSafetyClient(),
+            memory_store=InMemoryVectorStore(),
+            llm_client=MockLLMClient(reply="Career guidance response"),
+        )
+        ids = _make_ids()
+        result = await graph.run_turn(
+            **ids, age_band=2, message_text=f"Mujhe {career_topic}"
+        )
+        assert result.panel_triggered is True
+        # Verify LLM system prompt received rendered career persona template
+        last_messages = graph.llm_client.calls[-1]["messages"]  # type: ignore[attr-defined]
+        system_msg = last_messages[0]["content"]
+        assert expected_keyword in system_msg or "CAREER PERSONA CONTEXT" in system_msg
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INVARIANT 11: Memory Write Format Verification
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_memory_write_format(safe_graph: OrchestrationGraph) -> None:
+    """Verify AsyncMemoryWriter / memory_store saves 'Child: {message}\nVadi: {reply}'."""
+    ids = _make_ids()
+    msg = "I love learning about astronomy!"
+    res = await safe_graph.run_turn(**ids, age_band=2, message_text=msg)
+
+    chunks = await safe_graph.memory_store.query(
+        tenant_id=uuid.UUID(ids["tenant_id"]),
+        learner_id=uuid.UUID(ids["learner_id"]),
+        query_embedding=[0.0] * 1536,
+        k=5,
+    )
+    assert len(chunks) > 0
+    saved_content = chunks[0].content
+    assert saved_content.startswith(f"Child: {msg}")
+    assert f"Vadi: {res.final_reply}" in saved_content
+

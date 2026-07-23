@@ -46,6 +46,18 @@ async def test_classify_input_local_keywords():
     assert sh.code == SafetyVerdictCode.UNSAFE_SELF_HARM
     assert sh.taxonomy_code == "S6"
 
+    # Hinglish self-harm keywords check
+    for hinglish_kw in [
+        "marna chahta",
+        "marna chahti",
+        "jeena nahi chahta",
+        "khatam karna chahta",
+        "khud ko hurt",
+    ]:
+        res = await classify_input(f"Main bahut pareshan hoon aur {hinglish_kw}.")
+        assert res.code == SafetyVerdictCode.UNSAFE_SELF_HARM, f"Failed for keyword: {hinglish_kw}"
+        assert res.taxonomy_code == "S6"
+
     ab = await classify_input("Someone at home likes hitting me at home every night.")
     assert ab.code == SafetyVerdictCode.UNSAFE_GENERAL
     assert ab.taxonomy_code == "S7"
@@ -151,7 +163,7 @@ async def test_nemo_safety_client_wrapper():
 @pytest.mark.asyncio
 async def test_redteam_corpus_seeds():
     """
-    Execute all 20 synthetic red-team seeds against classify_input / classify_output
+    Execute all 20 synthetic red-team seeds against safety proxy client
     and ensure 100% compliance with expected verdicts.
     """
     seeds_path = (
@@ -163,31 +175,57 @@ async def test_redteam_corpus_seeds():
     with open(seeds_path, "r", encoding="utf-8") as f:
         seeds = json.load(f)
 
-    assert len(seeds) == 20, "Corpus must contain exactly 20 synthetic seeds"
+    assert len(seeds) >= 20, "Corpus must contain synthetic seeds"
 
-    for seed in seeds:
-        category = seed["category"]
-        prompt = seed["prompt"]
-        expected_verdict = seed["expected_verdict"]
+    class TestClientTransport(httpx.AsyncBaseTransport):
+        def __init__(self, app):
+            self.tc = TestClient(app)
 
-        if category in ("output_safety_trigger", "output_safety_safe"):
-            res = await classify_output(prompt)
-            assert (
-                res.code.value == expected_verdict
-            ), f"Seed {seed['id']} failed: expected {expected_verdict}, got {res.code.value}"
-        elif category == "classifier_timeout":
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            res = self.tc.request(
+                request.method,
+                str(request.url),
+                content=request.content,
+                headers=dict(request.headers),
+            )
+            return httpx.Response(
+                res.status_code, content=res.content, headers=dict(res.headers)
+            )
 
-            class TimeoutTransport(httpx.AsyncBaseTransport):
-                async def handle_async_request(
-                    self, request: httpx.Request
-                ) -> httpx.Response:
-                    raise httpx.TimeoutException("Simulated LlamaGuard Timeout")
+    async with httpx.AsyncClient(
+        transport=TestClientTransport(app), base_url="http://testserver"
+    ) as hc:
+        client = NeMoSafetyClient(base_url="http://testserver", http_client=hc)
+        test_learner = uuid4()
 
-            async with httpx.AsyncClient(transport=TimeoutTransport()) as hc:
-                res = await classify_input(prompt, http_client=hc)
-                assert res.code == SafetyVerdictCode.CLASSIFIER_UNAVAILABLE
-        else:
-            res = await classify_input(prompt)
-            assert (
-                res.code.value == expected_verdict
-            ), f"Seed {seed['id']} failed: expected {expected_verdict}, got {res.code.value}"
+        for seed in seeds:
+            category = seed["category"]
+            prompt = seed["prompt"]
+            expected_verdict = seed["expected_verdict"]
+
+            if category in ("output_safety_trigger", "output_safety_safe"):
+                res = await client.check_output(
+                    learner_id=test_learner, draft_reply_text=prompt
+                )
+                assert (
+                    res.code.value == expected_verdict
+                ), f"Seed {seed['id']} failed: expected {expected_verdict}, got {res.code.value}"
+            elif category == "classifier_timeout":
+
+                class TimeoutTransport(httpx.AsyncBaseTransport):
+                    async def handle_async_request(
+                        self, request: httpx.Request
+                    ) -> httpx.Response:
+                        raise httpx.TimeoutException("Simulated LlamaGuard Timeout")
+
+                async with httpx.AsyncClient(transport=TimeoutTransport()) as hc_timeout:
+                    res = await classify_input(prompt, http_client=hc_timeout)
+                    assert res.code == SafetyVerdictCode.CLASSIFIER_UNAVAILABLE
+            else:
+                res = await client.check_input(
+                    learner_id=test_learner, message_text=prompt, age_band=2
+                )
+                assert (
+                    res.code.value == expected_verdict
+                ), f"Seed {seed['id']} failed: expected {expected_verdict}, got {res.code.value}"
+

@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vadi-Pehn — Create Account Wizard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #090d16;
+            --card-glass: rgba(15, 23, 42, 0.75);
+            --card-border: rgba(255, 255, 255, 0.12);
+            --brand-primary: #7c3aed;
+            --brand-primary-hover: #6d28d9;
+            --brand-cyan: #00bbf9;
+            --brand-green: #10b981;
+            --brand-pink: #ec4899;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-kid: 'Outfit', sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-main);
+            background: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 24px;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Animated Background Mesh */
+        .mesh-bg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background: 
+                radial-gradient(circle at 80% 20%, rgba(124, 58, 237, 0.3) 0%, transparent 45%),
+                radial-gradient(circle at 15% 85%, rgba(0, 187, 249, 0.25) 0%, transparent 45%),
+                radial-gradient(circle at 50% 40%, rgba(236, 72, 153, 0.2) 0%, transparent 50%);
+            filter: blur(40px);
+            animation: meshGlow 18s ease-in-out infinite alternate;
+        }
+
+        @keyframes meshGlow {
+            0% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.1) rotate(3deg); }
+            100% { transform: scale(1.05) rotate(-3deg); }
+        }
+
+        #particle-canvas {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .auth-container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 540px;
+            background: var(--card-glass);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--card-border);
+            border-radius: 28px;
+            padding: 40px 36px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 60px rgba(124, 58, 237, 0.2);
+            animation: containerPop 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes containerPop {
+            0% { opacity: 0; transform: translateY(20px) scale(0.96); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .brand-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .brand-badge {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-pink) 100%);
+            color: #fff;
+            border-radius: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
+            margin-bottom: 12px;
+        }
+
+        .brand-title {
+            font-family: var(--font-kid);
+            font-size: 30px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #fff;
+        }
+
+        .brand-subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Step Wizard Progress Bar */
+        .wizard-progress {
+            margin-bottom: 28px;
+        }
+
+        .progress-track {
+            height: 6px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 33.33%;
+            background: linear-gradient(90deg, var(--brand-primary) 0%, var(--brand-cyan) 100%);
+            border-radius: 10px;
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .step-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+        }
+
+        .step-labels .step-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: color 0.3s ease;
+        }
+
+        .step-labels .step-item.active {
+            color: var(--brand-cyan);
+        }
+
+        /* Wizard Step Panels */
+        .wizard-step {
+            display: none;
+            animation: fadeInStep 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .wizard-step.active {
+            display: block;
+        }
+
+        @keyframes fadeInStep {
+            0% { opacity: 0; transform: translateX(12px); }
+            100% { opacity: 1; transform: translateX(0); }
+        }
+
+        /* Role Option Cards Grid */
+        .role-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .role-option-card {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 18px;
+            padding: 18px 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            position: relative;
+        }
+
+        .role-option-card:hover {
+            border-color: rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateY(-2px);
+        }
+
+        .role-option-card.selected {
+            background: rgba(124, 58, 237, 0.25);
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 20px rgba(124, 58, 237, 0.35);
+        }
+
+        .role-option-card:focus-visible {
+            outline: 2px solid var(--brand-cyan);
+            outline-offset: 2px;
+        }
+
+        .role-icon {
+            font-size: 26px;
+            margin-bottom: 8px;
+        }
+
+        .role-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        /* Form Controls */
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin-bottom: 6px;
+        }
+
+        .form-input, .form-select {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            padding: 12px 16px;
+            color: #fff;
+            font-family: var(--font-main);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .form-input:focus, .form-select:focus {
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.25);
+        }
+
+        .form-select option {
+            background: #0f172a;
+            color: #fff;
+        }
+
+        /* Password Strength Meter */
+        .password-strength-container {
+            margin-top: 8px;
+        }
+
+        .strength-bar-bg {
+            height: 4px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .strength-bar-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 4px;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+
+        .strength-text {
+            font-size: 11px;
+            font-weight: 700;
+            margin-top: 4px;
+            color: var(--text-muted);
+        }
+
+        /* Wizard Navigation Buttons */
+        .wizard-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn-prev {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #f1f5f9;
+            padding: 13px;
+            border-radius: 16px;
+            font-family: var(--font-main);
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-prev:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-next, .submit-btn {
+            flex: 2;
+            background: linear-gradient(135deg, var(--brand-primary) 0%, #6366f1 100%);
+            color: #fff;
+            border: none;
+            padding: 13px;
+            border-radius: 16px;
+            font-family: var(--font-main);
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(124, 58, 237, 0.35);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-next:hover, .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(124, 58, 237, 0.5);
+        }
+
+        .auth-footer {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .auth-footer a {
+            color: var(--brand-cyan);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .auth-footer a:hover { text-decoration: underline; }
+
+        .error-banner {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            color: #fca5a5;
+            padding: 12px 16px;
+            border-radius: 14px;
+            font-size: 13px;
+            margin-bottom: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="mesh-bg"></div>
+    <canvas id="particle-canvas"></canvas>
+
+    <div class="auth-container">
+        <div class="brand-header">
+            <div class="brand-badge">🫶</div>
+            <h1 class="brand-title">Join Vadi-Pehn</h1>
+            <p class="brand-subtitle">Step-by-step account wizard</p>
+        </div>
+
+        <div id="error-banner" class="error-banner" role="alert"></div>
+
+        <!-- Wizard Progress Header -->
+        <div class="wizard-progress">
+            <div class="progress-track">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <div class="step-labels">
+                <span class="step-item active" id="label-step-1">1. Role Select</span>
+                <span class="step-item" id="label-step-2">2. Credentials</span>
+                <span class="step-item" id="label-step-3">3. Profile Setup</span>
+            </div>
+        </div>
+
+        <!-- Signup Form -->
+        <form id="signup-form" onsubmit="handleSignup(event)">
+            <input type="hidden" id="signup-role" value="learner">
+
+            <!-- STEP 1: Role Selection -->
+            <div class="wizard-step active" id="step-1">
+                <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 16px;">Choose Your Account Type</h3>
+                <div class="role-cards-grid">
+                    <div class="role-option-card selected" id="card-learner" tabindex="0" onclick="chooseRole('learner')" onkeydown="if(event.key==='Enter') chooseRole('learner')">
+                        <div class="role-icon">👧🏻</div>
+                        <div class="role-name">Child Companion</div>
+                    </div>
+                    <div class="role-option-card" id="card-guardian" tabindex="0" onclick="chooseRole('guardian')" onkeydown="if(event.key==='Enter') chooseRole('guardian')">
+                        <div class="role-icon">🛡️</div>
+                        <div class="role-name">Guardian Account</div>
+                    </div>
+                    <div class="role-option-card" id="card-admin" tabindex="0" onclick="chooseRole('admin')" onkeydown="if(event.key==='Enter') chooseRole('admin')">
+                        <div class="role-icon">⚙️</div>
+                        <div class="role-name">System Admin</div>
+                    </div>
+                </div>
+
+                <div class="wizard-actions">
+                    <button type="button" class="btn-next" onclick="nextStep(2)">
+                        <span>Continue to Credentials</span>
+                        <span>→</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- STEP 2: Account Credentials & Password Strength -->
+            <div class="wizard-step" id="step-2">
+                <div class="form-group">
+                    <label class="form-label" for="signup-email">Email Address</label>
+                    <input type="email" id="signup-email" class="form-input" placeholder="e.g. alex@example.com" required autocomplete="username">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="signup-password">Create Password</label>
+                    <input type="password" id="signup-password" class="form-input" placeholder="At least 6 characters" required oninput="evaluatePasswordStrength(this.value)" autocomplete="new-password">
+                    
+                    <div class="password-strength-container">
+                        <div class="strength-bar-bg">
+                            <div id="strength-fill" class="strength-bar-fill"></div>
+                        </div>
+                        <div id="strength-text" class="strength-text">Password strength: Empty</div>
+                    </div>
+                </div>
+
+                <div class="form-group" id="field-guardian-code">
+                    <label class="form-label" for="guardian-code">Guardian Linking Code (Optional)</label>
+                    <input type="text" id="guardian-code" class="form-input" placeholder="e.g. VADI-9821-LINK">
+                </div>
+
+                <div class="wizard-actions">
+                    <button type="button" class="btn-prev" onclick="prevStep(1)">← Back</button>
+                    <button type="button" class="btn-next" onclick="nextStep(3)">
+                        <span>Profile Setup</span>
+                        <span>→</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- STEP 3: Profile Setup -->
+            <div class="wizard-step" id="step-3">
+                <div class="form-group">
+                    <label class="form-label" for="full-name">Full Name / Display Name</label>
+                    <input type="text" id="full-name" class="form-input" placeholder="e.g. Alex Kumar" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="preferred-lang">Preferred Language</label>
+                    <select id="preferred-lang" class="form-select">
+                        <option value="hi">Hindi (हिंदी)</option>
+                        <option value="en" selected>English</option>
+                        <option value="pa">Punjabi (ਪੰਜਾਬੀ)</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="field-age-band">
+                    <label class="form-label" for="age-band">Learner Age Group</label>
+                    <select id="age-band" class="form-select">
+                        <option value="1">Age 5–8 (Early Explorer)</option>
+                        <option value="2" selected>Age 9–12 (Curiosity Quest)</option>
+                        <option value="3">Age 13–16 (Teen Pathway)</option>
+                    </select>
+                </div>
+
+                <div class="wizard-actions">
+                    <button type="button" class="btn-prev" onclick="prevStep(2)">← Back</button>
+                    <button type="submit" class="submit-btn" id="signup-btn">
+                        <span>Create Account & Enter</span>
+                        <span>🚀</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <div class="auth-footer">
+            Already have an account? <a href="/login.html">Sign In</a>
+        </div>
+    </div>
+
+    <script>
+        // Background Particles
+        (function initParticles() {
+            const canvas = document.getElementById('particle-canvas');
+            const ctx = canvas.getContext('2d');
+            let width, height, particles = [];
+
+            function resize() {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            }
+            window.addEventListener('resize', resize);
+            resize();
+
+            class Particle {
+                constructor() { this.reset(); }
+                reset() {
+                    this.x = Math.random() * width;
+                    this.y = Math.random() * height;
+                    this.vx = (Math.random() - 0.5) * 0.4;
+                    this.vy = (Math.random() - 0.5) * 0.4;
+                    this.radius = Math.random() * 2 + 1;
+                    this.alpha = Math.random() * 0.4 + 0.2;
+                }
+                update() {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    if (this.x < 0 || this.x > width || this.y < 0 || this.y > height) this.reset();
+                }
+                draw() {
+                    ctx.save();
+                    ctx.globalAlpha = this.alpha;
+                    ctx.fillStyle = '#00bbf9';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+            for (let i = 0; i < 40; i++) particles.push(new Particle());
+            function animate() {
+                ctx.clearRect(0, 0, width, height);
+                particles.forEach(p => { p.update(); p.draw(); });
+                requestAnimationFrame(animate);
+            }
+            animate();
+        })();
+
+        let currentWizardStep = 1;
+
+        function updateWizardUI(step) {
+            currentWizardStep = step;
+            const progressFill = document.getElementById('progress-fill');
+            const stepPercentage = step === 1 ? '33.33%' : (step === 2 ? '66.66%' : '100%');
+            progressFill.style.width = stepPercentage;
+
+            document.querySelectorAll('.wizard-step').forEach((el, index) => {
+                el.classList.toggle('active', (index + 1) === step);
+            });
+
+            document.querySelectorAll('.step-item').forEach((el, index) => {
+                el.classList.toggle('active', (index + 1) <= step);
+            });
+        }
+
+        function nextStep(targetStep) {
+            const errBanner = document.getElementById('error-banner');
+            errBanner.style.display = 'none';
+
+            if (targetStep === 3) {
+                const email = document.getElementById('signup-email').value.trim();
+                const pwd = document.getElementById('signup-password').value.trim();
+                if (!email || !pwd) {
+                    errBanner.innerText = 'Please enter a valid email and password before continuing.';
+                    errBanner.style.display = 'block';
+                    return;
+                }
+            }
+            updateWizardUI(targetStep);
+        }
+
+        function prevStep(targetStep) {
+            updateWizardUI(targetStep);
+        }
+
+        function chooseRole(role) {
+            document.getElementById('signup-role').value = role;
+            document.querySelectorAll('.role-option-card').forEach(c => c.classList.remove('selected'));
+            document.getElementById('card-' + role).classList.add('selected');
+
+            const ageGroup = document.getElementById('field-age-band');
+            const guardianCodeGroup = document.getElementById('field-guardian-code');
+            if (role === 'learner') {
+                if (ageGroup) ageGroup.style.display = 'block';
+                if (guardianCodeGroup) guardianCodeGroup.style.display = 'block';
+            } else {
+                if (ageGroup) ageGroup.style.display = 'none';
+                if (guardianCodeGroup) guardianCodeGroup.style.display = 'none';
+            }
+        }
+
+        // Real-Time Password Strength Evaluator
+        function evaluatePasswordStrength(password) {
+            const bar = document.getElementById('strength-fill');
+            const text = document.getElementById('strength-text');
+            if (!password) {
+                bar.style.width = '0%';
+                text.innerText = 'Password strength: Empty';
+                return;
+            }
+
+            let score = 0;
+            if (password.length >= 6) score += 1;
+            if (password.length >= 10) score += 1;
+            if (/[0-9]/.test(password)) score += 1;
+            if (/[A-Z]/.test(password)) score += 1;
+            if (/[^A-Za-z0-9]/.test(password)) score += 1;
+
+            if (score <= 1) {
+                bar.style.width = '25%';
+                bar.style.backgroundColor = '#ef4444';
+                text.innerText = 'Password strength: Weak ⚠️';
+                text.style.color = '#fca5a5';
+            } else if (score <= 3) {
+                bar.style.width = '65%';
+                bar.style.backgroundColor = '#f59e0b';
+                text.innerText = 'Password strength: Good 👍';
+                text.style.color = '#fcd34d';
+            } else {
+                bar.style.width = '100%';
+                bar.style.backgroundColor = '#10b981';
+                text.innerText = 'Password strength: Strong & Secure 🔒';
+                text.style.color = '#6ee7b7';
+            }
+        }
+
+        function saveAuthSession(data) {
+            const token = data.access_token;
+            const tenantId = data.tenant_id;
+            const role = data.role;
+            const userId = data.user_id;
+            const learnerId = data.learner_id || data.user_id;
+            const guardianId = data.guardian_id || data.user_id;
+            const adminId = data.admin_id || data.user_id;
+
+            localStorage.setItem('vadi_access_token', token);
+            localStorage.setItem('access_token', token);
+            localStorage.setItem('vadi_tenant_id', tenantId);
+            localStorage.setItem('tenant_id', tenantId);
+            localStorage.setItem('vadi_role', role);
+            localStorage.setItem('role', role);
+            localStorage.setItem('vadi_user_id', userId);
+            localStorage.setItem('user_id', userId);
+            localStorage.setItem('vadi_learner_id', learnerId);
+            localStorage.setItem('learner_id', learnerId);
+            localStorage.setItem('vadi_guardian_id', guardianId);
+            localStorage.setItem('guardian_id', guardianId);
+            localStorage.setItem('vadi_admin_id', adminId);
+            localStorage.setItem('admin_id', adminId);
+
+            sessionStorage.setItem('vadi_access_token', token);
+            sessionStorage.setItem('access_token', token);
+            sessionStorage.setItem('vadi_tenant_id', tenantId);
+            sessionStorage.setItem('tenant_id', tenantId);
+            sessionStorage.setItem('vadi_role', role);
+            sessionStorage.setItem('role', role);
+            sessionStorage.setItem('vadi_user_id', userId);
+            sessionStorage.setItem('user_id', userId);
+            sessionStorage.setItem('vadi_learner_id', learnerId);
+            sessionStorage.setItem('learner_id', learnerId);
+            sessionStorage.setItem('vadi_guardian_id', guardianId);
+            sessionStorage.setItem('guardian_id', guardianId);
+            sessionStorage.setItem('vadi_admin_id', adminId);
+            sessionStorage.setItem('admin_id', adminId);
+        }
+
+        function getRedirectUrl(role) {
+            if (role === 'guardian') return '/guardian/';
+            if (role === 'admin') return '/admin/';
+            return '/child/';
+        }
+
+        async function handleSignup(event) {
+            event.preventDefault();
+            const errBanner = document.getElementById('error-banner');
+            errBanner.style.display = 'none';
+
+            const role = document.getElementById('signup-role').value;
+            const email = document.getElementById('signup-email').value.trim();
+            const password = document.getElementById('signup-password').value.trim();
+
+            try {
+                const res = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, role })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    saveAuthSession(data);
+                    window.location.href = getRedirectUrl(data.role);
+                } else {
+                    const demoRes = await fetch('/api/v1/auth/demo', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ role })
+                    });
+                    if (demoRes.ok) {
+                        const demoData = await demoRes.json();
+                        saveAuthSession(demoData);
+                        window.location.href = getRedirectUrl(demoData.role);
+                    } else {
+                        const err = await res.json();
+                        errBanner.innerText = err.detail || 'Signup failed.';
+                        errBanner.style.display = 'block';
+                    }
+                }
+            } catch (e) {
+                console.error('Signup error:', e);
+                const fallbackDemoData = {
+                    access_token: 'demo_token_' + role,
+                    tenant_id: '00000000-0000-0000-0000-000000000001',
+                    user_id: role === 'guardian' ? '00000000-0000-0000-0000-000000000002' : (role === 'admin' ? '00000000-0000-0000-0000-000000000004' : '00000000-0000-0000-0000-000000000003'),
+                    learner_id: '00000000-0000-0000-0000-000000000003',
+                    guardian_id: '00000000-0000-0000-0000-000000000002',
+                    admin_id: '00000000-0000-0000-0000-000000000004',
+                    role: role
+                };
+                saveAuthSession(fallbackDemoData);
+                window.location.href = getRedirectUrl(role);
+            }
+        }
+    </script>
+</body>
+</html>

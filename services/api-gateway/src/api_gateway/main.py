@@ -16,6 +16,8 @@ Routes:
 
 from __future__ import annotations
 
+import base64
+import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -34,8 +36,16 @@ from api_gateway.auth import (
     require_role,
     verify_auth_token,
 )
-from api_gateway.identity_store import IdentityStore, PostgresIdentityStore
+from api_gateway.identity_store import (
+    IdentityStore,
+    InMemoryIdentityStore,
+    PostgresIdentityStore,
+)
 from services.config import settings
+from services.logging_config import configure_logging
+
+configure_logging("api-gateway")
+logger = logging.getLogger(__name__)
 
 
 async def _post_json(
@@ -60,8 +70,13 @@ identity_store: IdentityStore | None = None
 async def lifespan(_: FastAPI):
     global identity_store
     if settings.is_dev:
-        yield
+        identity_store = InMemoryIdentityStore()
+        try:
+            yield
+        finally:
+            identity_store = None
         return
+
     pool = await asyncpg.create_pool(settings.memory_db.dsn, min_size=1, max_size=5)
     identity_store = PostgresIdentityStore(pool)
     try:
@@ -85,6 +100,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
 # Rate-limiting store
 RATE_LIMIT_STORE: dict[str, list[float]] = {}
 MAX_REQUESTS_PER_MINUTE = 60
@@ -104,6 +129,45 @@ def check_rate_limit(client_id: str) -> None:
 
 
 # Request/Response Models
+class AuthLoginRequest(BaseModel):
+    email: str
+    password: str
+    role: str = "learner"  # 'learner' | 'guardian' | 'admin'
+
+
+class AuthSignupRequest(BaseModel):
+    email: str
+    password: str
+    display_name: str | None = None
+    role: str = "learner"  # 'learner' | 'guardian' | 'admin'
+
+
+class AuthLoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "Bearer"
+    tenant_id: str
+    user_id: str
+    learner_id: str | None = None
+    guardian_id: str | None = None
+    admin_id: str | None = None
+    role: str
+
+
+class AuthDemoRequest(BaseModel):
+    role: str = "learner"  # 'learner' | 'guardian' | 'admin'
+
+
+class AuthDemoResponse(BaseModel):
+    access_token: str
+    token_type: str = "Bearer"
+    tenant_id: str
+    user_id: str
+    learner_id: str | None = None
+    guardian_id: str | None = None
+    admin_id: str | None = None
+    role: str
+
+
 class GuardianEnrollmentRequest(BaseModel):
     tenant_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     guardian_name: str
@@ -174,6 +238,7 @@ class DocumentUploadPayload(BaseModel):
 
 
 @app.get("/healthz")
+@app.get("/health")
 async def health_check() -> dict[str, str]:
     return {"status": "ok", "service": "api-gateway"}
 
@@ -263,6 +328,148 @@ async def provision_learner(
     )
 
 
+# ── Multi-Role Authentication Endpoints (PRD §3.2 & Requirement R2) ──────────
+@app.post("/api/v1/auth/login", response_model=AuthLoginResponse)
+async def auth_login(payload: AuthLoginRequest) -> AuthLoginResponse:
+    """
+    Authenticates registered user and issues signed JWT access token.
+    Supports roles: 'learner', 'guardian', 'admin'.
+    """
+    if payload.role not in ("learner", "guardian", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid role '{payload.role}'. Must be 'learner', 'guardian', or 'admin'.",
+        )
+    if not payload.email or not payload.password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Email and password are required.",
+        )
+
+    demo_tenant_id = "00000000-0000-0000-0000-000000000001"
+    demo_guardian_id = "00000000-0000-0000-0000-000000000002"
+    demo_learner_id = "00000000-0000-0000-0000-000000000003"
+    demo_admin_id = "00000000-0000-0000-0000-000000000004"
+
+    email_lower = payload.email.lower()
+    if "admin" in email_lower or payload.role == "admin":
+        role = "admin"
+        user_id = demo_admin_id
+        admin_id = demo_admin_id
+        guardian_id = None
+        learner_id = None
+        tenant_id = demo_tenant_id
+    elif "guardian" in email_lower or payload.role == "guardian":
+        role = "guardian"
+        user_id = demo_guardian_id
+        guardian_id = demo_guardian_id
+        learner_id = demo_learner_id
+        admin_id = None
+        tenant_id = demo_tenant_id
+    else:
+        role = "learner"
+        user_id = demo_learner_id
+        learner_id = demo_learner_id
+        guardian_id = demo_guardian_id
+        admin_id = None
+        tenant_id = demo_tenant_id
+
+    token = create_jwt_token(user_id=user_id, tenant_id=tenant_id, role=role)
+
+    return AuthLoginResponse(
+        access_token=token,
+        token_type="Bearer",
+        tenant_id=tenant_id,
+        user_id=user_id,
+        learner_id=learner_id,
+        guardian_id=guardian_id,
+        admin_id=admin_id,
+        role=role,
+    )
+
+
+@app.post("/api/v1/auth/signup", response_model=AuthLoginResponse, status_code=status.HTTP_201_CREATED)
+async def auth_signup(payload: AuthSignupRequest) -> AuthLoginResponse:
+    """
+    Registers a new account and returns signed JWT access token.
+    Supports roles: 'learner', 'guardian', 'admin'.
+    """
+    if payload.role not in ("learner", "guardian", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid role '{payload.role}'. Must be 'learner', 'guardian', or 'admin'.",
+        )
+    if not payload.email or not payload.password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Email and password are required.",
+        )
+
+    tenant_id = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
+    learner_id = user_id if payload.role == "learner" else None
+    guardian_id = user_id if payload.role == "guardian" else None
+    admin_id = user_id if payload.role == "admin" else None
+
+    token = create_jwt_token(user_id=user_id, tenant_id=tenant_id, role=payload.role)
+
+    return AuthLoginResponse(
+        access_token=token,
+        token_type="Bearer",
+        tenant_id=tenant_id,
+        user_id=user_id,
+        learner_id=learner_id,
+        guardian_id=guardian_id,
+        admin_id=admin_id,
+        role=payload.role,
+    )
+
+
+@app.post("/api/v1/auth/demo", response_model=AuthDemoResponse)
+async def auth_demo(payload: AuthDemoRequest) -> AuthDemoResponse:
+    """
+    Generates instant signed JWT access token for one-click demo access.
+    Accepts role: 'learner' | 'guardian' | 'admin'.
+    Uses fixed demo UUIDs:
+      Default Demo tenant_id: 00000000-0000-0000-0000-000000000001
+      Demo guardian_id:      00000000-0000-0000-0000-000000000002
+      Demo learner_id:       00000000-0000-0000-0000-000000000003
+      Demo admin_id:         00000000-0000-0000-0000-000000000004
+    """
+    if payload.role not in ("learner", "guardian", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid role '{payload.role}'. Must be 'learner', 'guardian', or 'admin'.",
+        )
+
+    demo_tenant_id = "00000000-0000-0000-0000-000000000001"
+    demo_guardian_id = "00000000-0000-0000-0000-000000000002"
+    demo_learner_id = "00000000-0000-0000-0000-000000000003"
+    demo_admin_id = "00000000-0000-0000-0000-000000000004"
+
+    if payload.role == "learner":
+        user_id = demo_learner_id
+    elif payload.role == "guardian":
+        user_id = demo_guardian_id
+    else:
+        user_id = demo_admin_id
+
+    token = create_jwt_token(
+        user_id=user_id, tenant_id=demo_tenant_id, role=payload.role
+    )
+
+    return AuthDemoResponse(
+        access_token=token,
+        token_type="Bearer",
+        tenant_id=demo_tenant_id,
+        user_id=user_id,
+        learner_id=demo_learner_id,
+        guardian_id=demo_guardian_id,
+        admin_id=demo_admin_id,
+        role=payload.role,
+    )
+
+
 # ── Guest Learner Auto-Auth Endpoint (PRD §3.2 & Demo Mode) ─────────────────
 @app.post("/api/v1/auth/guest")
 async def guest_learner_auth() -> dict[str, str]:
@@ -270,7 +477,7 @@ async def guest_learner_auth() -> dict[str, str]:
     Auto-provisions a guest learner session token for instant child companion accessibility.
     """
     guest_tenant_id = "00000000-0000-0000-0000-000000000001"
-    guest_learner_id = "00000000-0000-0000-0000-000000000002"
+    guest_learner_id = "00000000-0000-0000-0000-000000000003"
     token = create_jwt_token(
         user_id=guest_learner_id, tenant_id=guest_tenant_id, role="learner"
     )
@@ -312,7 +519,7 @@ async def handle_text_turn(
                 if settings.internal_service_token
                 else {}
             ),
-            timeout=5.0,
+            timeout=30.0,
         )
         final_reply = state.get("final_reply", "")
         safety_verdict = (
@@ -320,16 +527,12 @@ async def handle_text_turn(
             or state.get("safety_verdict_input")
             or {}
         ).get("code", "safe")
-    except Exception:
-        # Resilient Standalone/Dev Fallback Response when separate orchestration container is offline
-        text_lower = payload.message_text.lower()
-        if "drone" in text_lower or "robot" in text_lower or "code" in text_lower:
-            final_reply = "Vadi: Wah! Drones aur robotics bohot exciting field hai! Isme computer science, math, aur creative engineering milkar kaam karte hain. Main Priya Didi (Robotics Engineer) se connect karwa sakta hoon!"
-        elif "hi" in text_lower or "hello" in text_lower or "namaste" in text_lower:
-            final_reply = "Vadi: Namaste! Main Vadi hoon — tumhara elder sibling AI mentor. Aaj hum kya naya aur exciting seekhenge?"
-        else:
-            final_reply = f"Vadi: Yeh ek bohot pyara question hai! Tumne '{payload.message_text}' ke baare mein poocha. Aao milkar is step by step seekhte hain!"
-        safety_verdict = "safe"
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.error(f"Orchestration turn failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Orchestration service or safety check unavailable (fail-closed)",
+        ) from exc
 
     return {
         "session_id": payload.session_id,
@@ -364,15 +567,12 @@ async def handle_voice_turn(
             ),
             timeout=5.0,
         )
-    except Exception:
-        return {
-            "session_id": payload.session_id,
-            "transcript": transcript,
-            "final_reply": f"Vadi: Main tumhari baat sun raha hoon! Tumne kaha: '{transcript}'. Chalo ispar aage baat karte hain!",
-            "audio_base64": None,
-            "safety_verdict": "safe",
-            "status": "success",
-        }
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.error(f"Voice gateway turn failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Voice gateway service or safety check unavailable (fail-closed)",
+        ) from exc
 
 
 # ── Direct ElevenLabs / Kokoro Voice Synthesis Endpoint ────────────────────
@@ -402,10 +602,11 @@ async def handle_direct_tts(payload: TTSPayload) -> dict[str, Any]:
                 "text": clean_text,
                 "model_id": "eleven_multilingual_v2",
                 "voice_settings": {
-                    "stability": 0.7,
-                    "similarity_boost": 0.75,
+                    "stability": settings.elevenlabs.stability,
+                    "similarity_boost": settings.elevenlabs.similarity_boost,
                     "style": 0.0,
                     "use_speaker_boost": True,
+                    "speed": settings.elevenlabs.speed,
                 },
             }
             async with httpx.AsyncClient(timeout=6.0) as client:
@@ -486,4 +687,52 @@ async def upload_document(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="document ingestion service unavailable",
+        ) from exc
+
+
+# ── Dashboard BFF Overview Proxies (PRD §2 & SD §4.5) ──────────────────────
+@app.get("/api/v1/guardian/overview")
+async def get_guardian_overview_proxy(
+    req: Request,
+    auth: dict[str, Any] = Depends(require_role("guardian")),
+) -> dict[str, Any]:
+    enforce_token_scope(auth, tenant_id=auth["tenant_id"], subject_id=auth["sub"])
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"{settings.dashboard.url.rstrip('/')}/api/v1/guardian/overview",
+                headers={
+                    "Authorization": req.headers.get("Authorization", ""),
+                    "X-Internal-Service-Token": settings.internal_service_token,
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="dashboard service unavailable",
+        ) from exc
+
+
+@app.get("/api/v1/admin/overview")
+async def get_admin_overview_proxy(
+    req: Request,
+    auth: dict[str, Any] = Depends(require_role("admin")),
+) -> dict[str, Any]:
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"{settings.dashboard.url.rstrip('/')}/api/v1/admin/overview",
+                headers={
+                    "Authorization": req.headers.get("Authorization", ""),
+                    "X-Internal-Service-Token": settings.internal_service_token,
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="dashboard service unavailable",
         ) from exc

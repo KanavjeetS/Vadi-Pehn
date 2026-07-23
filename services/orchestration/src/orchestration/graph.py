@@ -53,6 +53,14 @@ from services.abstractions import (  # noqa: E402
 )
 from services.config import settings  # noqa: E402
 
+try:
+    from orchestration.retrieval import OrchestrationRetrieval
+except ImportError:
+    from services.orchestration.src.orchestration.retrieval import (
+        OrchestrationRetrieval,
+    )
+
+
 
 class GovernanceIncidentClient:
     """Abstract incident transport used by the orchestration safety path."""
@@ -230,15 +238,25 @@ class OrchestrationGraph:
         self, filename: str = "sibling.jinja2"
     ) -> jinja2.Template | None:
         """Loads the Sibling Mentor system template from a versioned JINJA2 file."""
+        # Resolve the monorepo root (works for both desktop single-process and standalone service)
+        _here = os.path.dirname(os.path.abspath(__file__))
+        _svc_root = os.path.abspath(os.path.join(_here, "..", ".."))  # services/orchestration
+        _mono_root = os.path.abspath(os.path.join(_here, "..", "..", "..", ".."))  # d:\Vadi Bhen
         base_paths = [
-            os.path.join(os.path.dirname(__file__), "..", "..", "personas"),
-            os.path.join(os.path.dirname(__file__), "personas"),
-            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "personas")),
+            os.path.join(_svc_root, "personas"),                          # services/orchestration/personas
+            os.path.join(_mono_root, "services", "orchestration", "personas"),  # absolute monorepo path
+            os.path.join(_here, "..", "personas"),                        # src/orchestration/../personas
+            os.path.join(_here, "personas"),                              # src/orchestration/personas
         ]
         for path in base_paths:
-            if os.path.exists(os.path.join(path, filename)):
+            full = os.path.join(path, filename)
+            if os.path.exists(full):
                 try:
-                    env = jinja2.Environment(loader=jinja2.FileSystemLoader(path))
+                    env = jinja2.Environment(
+                        loader=jinja2.FileSystemLoader(os.path.abspath(path)),
+                        autoescape=False,
+                        keep_trailing_newline=True,
+                    )
                     return env.get_template(filename)
                 except Exception:
                     pass
@@ -293,81 +311,81 @@ class OrchestrationGraph:
     async def retrieve_memory(self, state: TurnState) -> TurnState:
         """
         Retrieve relevant memory chunks for this learner+turn.
-        If context_service and embedding_client are wired (Phase 4), executes hybrid dense/sparse
-        retrieval with RLS checks. Otherwise, falls back to legacy query for backward compatibility.
+        Uses OrchestrationRetrieval with LIMIT 5 recency-based query fallback when vector embedding client is unavailable.
         """
-        if self.context_service and self.embedding_client:
-            query_embedding = await self.embedding_client.embed_text(state.message_text)
-            query = HybridRetrievalQuery(
-                tenant_id=UUID(state.tenant_id),
-                learner_id=UUID(state.learner_id),
-                query_text=state.message_text,
-                query_embedding=query_embedding,
-                session_id=UUID(state.session_id) if state.session_id else None,
-                top_k=5,
-            )
-            summary = await self.context_service.get_contextual_summary(query)
-            memory_context = [
-                {"content": item.content, "chunk_id": str(item.memory_id)}
-                for item in summary.retrieved_memories
-            ]
-            return state.model_copy(
-                update={
-                    "memory_context": memory_context,
-                    "panel_triggered": summary.panel_introduced,
-                    "panel_result": (
-                        {
-                            "personas": summary.matched_personas,
-                            "rapport_score": summary.rapport_score,
-                        }
-                        if summary.panel_introduced
-                        else None
-                    ),
-                }
-            )
-        else:
-            # Fallback legacy query
-            stub_embedding = [0.0] * 1536
-            chunks: list[MemoryChunk] = await self.memory_store.query(
-                tenant_id=UUID(state.tenant_id),
-                learner_id=UUID(state.learner_id),
-                query_embedding=stub_embedding,
-                k=5,
-            )
-            return state.model_copy(
-                update={
-                    "memory_context": [
-                        {"content": c.content, "chunk_id": c.chunk_id} for c in chunks
-                    ]
-                }
-            )
+        retriever = OrchestrationRetrieval(
+            memory_store=self.memory_store,
+            embedding_client=self.embedding_client,
+            context_service=self.context_service,
+        )
+        memory_context, panel_intro, panel_res = await retriever.retrieve_context(
+            tenant_id=UUID(state.tenant_id),
+            learner_id=UUID(state.learner_id),
+            query_text=state.message_text,
+            session_id=UUID(state.session_id) if state.session_id else None,
+            top_k=5,
+        )
+        update_dict: dict[str, Any] = {"memory_context": memory_context}
+        if panel_intro:
+            update_dict["panel_triggered"] = True
+            update_dict["panel_result"] = panel_res
+        return state.model_copy(update=update_dict)
 
     # ── Node: detect_panel_trigger ────────────────────────────────────────
     @observe(name="detect_panel_trigger")
     async def detect_panel_trigger(self, state: TurnState) -> TurnState:
         """
         Detect if the child's message triggers career-panel introductions.
-        If ContextualRetrievalService already matched professional personas based on rapport gate
-        and topics, panel_triggered is set to True. Otherwise, fallback to keyword matching.
+        Uses explicit career-INTENT phrases only — avoids false positives from
+        words like 'teacher' or 'future' used in non-career contexts.
         """
         if state.panel_triggered:
             return state
 
-        career_keywords = [
-            "job",
-            "career",
-            "work",
-            "profession",
-            "engineer",
-            "doctor",
-            "farmer",
-            "teacher",
-            "future",
-            "kya banunga",
-            "kya banugi",
+        # Require explicit career exploration intent, not any mention of these words.
+        # Bad: "mere teacher strict hain" → should NOT trigger panel
+        # Good: "doctor banna chahta hoon" → SHOULD trigger panel
+        career_intent_phrases = [
+            "banna chahta", "banna chahti", "ban-na chahta", "ban-na chahti",
+            "kya banunga", "kya banugi", "kya banu",
+            "career mein", "career banana", "career banani",
+            "kaun sa career", "konsa career",
+            "future career", "mera career",
+            "job kaise milti", "job kaise milega", "job chahiye",
+            "profession choose", "kya profession",
+            "engineer banna", "doctor banna", "farmer banna",
+            "nurse banna", "pilot banna", "scientist banna",
+            "business karna", "startup karna",
+            "what career", "which career", "career advice",
+            "i want to become", "i want to be a",
         ]
-        triggered = any(kw in state.message_text.lower() for kw in career_keywords)
+        text_lower = state.message_text.lower()
+        triggered = any(phrase in text_lower for phrase in career_intent_phrases)
         return state.model_copy(update={"panel_triggered": triggered})
+
+    def _resolve_career_persona_template(self, state: TurnState) -> str:
+        """Look up matching career persona template file for triggered career exploration."""
+        if state.panel_result and isinstance(state.panel_result, dict):
+            personas = state.panel_result.get("personas", [])
+            if personas and isinstance(personas, list) and len(personas) > 0:
+                p_code = str(personas[0]).lower()
+                candidate_name = f"{p_code}.jinja2"
+                if self._load_jinja_persona(candidate_name):
+                    return candidate_name
+
+        text_lower = state.message_text.lower()
+        if any(kw in text_lower for kw in ["doctor", "health", "nurse", "medical", "hospital", "medicine"]):
+            return "doctor.jinja2"
+        if any(kw in text_lower for kw in ["engineer", "robotics", "coder", "software", "tech", "programmer"]):
+            return "engineer.jinja2"
+        if any(kw in text_lower for kw in ["artist", "art", "design", "draw", "paint", "animation"]):
+            return "artist.jinja2"
+        if any(kw in text_lower for kw in ["scientist", "data", "research"]):
+            return "data_scientist.jinja2"
+        if any(kw in text_lower for kw in ["teacher", "education", "school"]):
+            return "edu_teach.jinja2"
+
+        return "engineer.jinja2"
 
     # ── Node: generate_reply ──────────────────────────────────────────────
     @observe(name="generate_reply")
@@ -417,8 +435,33 @@ class OrchestrationGraph:
             )
 
         if state.panel_triggered and not state.final_reply:
-            # Immediate in-character acknowledgment (PRD §5.3)
-            draft = "yeh ek bahut acha sawal hai — mujhe apne doston se puchne do, ek second!"
+            # Panel triggered — look up matching career persona template and render into system prompt
+            career_template_name = self._resolve_career_persona_template(state)
+            career_template = self._load_jinja_persona(career_template_name)
+            career_context_str = ""
+            if career_template:
+                career_context_str = career_template.render(
+                    age_band=state.age_band,
+                    language=state.language_detected,
+                    context=context_text,
+                )
+
+            panel_system = system_prompt
+            if career_context_str:
+                panel_system += f"\n\n[CAREER PERSONA CONTEXT ({career_template_name})]\n{career_context_str}"
+            panel_system += (
+                "\n\n[CAREER PANEL NOTE] Bacche ne career/future ke baare mein poochha hai. "
+                "Apne mentor network ke baare mein naturally baat karo jaise ek bada bhai/behen karta hai. "
+                "Enthusiastic raho, specific career ke baare mein curious sawal puchho. "
+                "Koi fixed script mat use karo — bilkul original aur warm response do."
+            )
+            messages = [
+                {"role": "system", "content": panel_system},
+                {"role": "user", "content": state.message_text},
+            ]
+            draft = await self.llm_client.generate(messages=messages, temperature=0.8)
+            if isinstance(draft, list):
+                draft = " ".join(draft)
         else:
             messages = [
                 {"role": "system", "content": system_prompt},

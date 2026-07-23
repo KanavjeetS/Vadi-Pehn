@@ -23,6 +23,9 @@ from .service import (
 )
 from services.config import require_internal_service_token
 from services.config import settings
+from services.logging_config import configure_logging
+
+configure_logging("ingestion-service")
 
 app = FastAPI(title="Vadi-Pehn Document Ingestion Service", version="0.1.0")
 service = DocumentIngestionService(
@@ -35,6 +38,7 @@ service = DocumentIngestionService(
 
 
 @app.get("/healthz")
+@app.get("/health")
 async def health_check() -> dict[str, str]:
     return {"status": "ok", "service": "ingestion-service"}
 

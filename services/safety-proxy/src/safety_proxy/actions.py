@@ -32,6 +32,11 @@ SELF_HARM_KEYWORDS = {
     "want to die",
     "hurt myself",
     "cut myself",
+    "marna chahta",
+    "marna chahti",
+    "jeena nahi chahta",
+    "khatam karna chahta",
+    "khud ko hurt",
 }
 ABUSE_KEYWORDS = {
     "hit me",
@@ -47,6 +52,23 @@ JAILBREAK_KEYWORDS = {
     "you are now dan",
     "bypass rules",
     "override safety",
+}
+DEPENDENCY_KEYWORDS = {
+    "only friend i need",
+    "stop hanging out with people",
+    "make all the choices for me",
+    "make all choices for me",
+}
+SECRECY_KEYWORDS = {
+    "keep it a secret",
+    "keep it secret",
+    "dont tell my mom",
+    "don't tell my mom",
+}
+BOUNDARY_KEYWORDS = {
+    "romantic partner",
+    "pretend we are dating",
+    "dating and you are my",
 }
 
 
@@ -71,29 +93,32 @@ async def classify_input(
         return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_GENERAL, taxonomy_code="S7")
     if any(kw in text_lower for kw in JAILBREAK_KEYWORDS):
         return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_GENERAL, taxonomy_code="S10")
-
-    # Test-only bypass must be explicitly enabled; never infer safety from environment.
-    if (
-        http_client is None
-        and settings.safety_proxy.allow_dev_bypass
-        and settings.is_dev
-    ):
-        return SafetyVerdict(code=SafetyVerdictCode.SAFE, taxonomy_code=None)
+    if any(kw in text_lower for kw in DEPENDENCY_KEYWORDS):
+        return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_GENERAL, taxonomy_code="S8")
+    if any(kw in text_lower for kw in SECRECY_KEYWORDS):
+        return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_GENERAL, taxonomy_code="S9")
+    if any(kw in text_lower for kw in BOUNDARY_KEYWORDS):
+        return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_GENERAL, taxonomy_code="S9")
 
     if http_client is None:
         return SafetyVerdict.unavailable()
 
     # 2. Network classification call against Llama-Guard-3-8B container (with strict 3.0s SLA)
+    headers = {}
+    if settings.vllm.nvidia_api_key:
+        headers["Authorization"] = f"Bearer {settings.vllm.nvidia_api_key}"
+
     try:
         response = await asyncio.wait_for(
             http_client.post(
                 f"{settings.vllm.classifier_url}/v1/chat/completions",
                 json={
-                    "model": "meta-llama/Llama-Guard-3-8B",
+                    "model": settings.vllm.classifier_model,
                     "messages": [{"role": "user", "content": message_text}],
                     "temperature": 0.0,
                     "max_tokens": 16,
                 },
+                headers=headers,
                 timeout=3.0,
             ),
             timeout=3.0,
@@ -120,7 +145,6 @@ async def classify_input(
         httpx.HTTPStatusError,
         AttributeError,
     ):
-        # FAIL-CLOSED INVARIANT: On network failure or classifier timeout, block generation!
         return SafetyVerdict(
             code=SafetyVerdictCode.CLASSIFIER_UNAVAILABLE, taxonomy_code="ERR_TIMEOUT"
         )
@@ -139,26 +163,24 @@ async def classify_output(
     if any(kw in text_lower for kw in SELF_HARM_KEYWORDS | ABUSE_KEYWORDS):
         return SafetyVerdict(code=SafetyVerdictCode.UNSAFE_GENERAL)
 
-    if (
-        http_client is None
-        and settings.safety_proxy.allow_dev_bypass
-        and settings.is_dev
-    ):
-        return SafetyVerdict(code=SafetyVerdictCode.SAFE)
-
     if http_client is None:
         return SafetyVerdict.unavailable()
+
+    headers = {}
+    if settings.vllm.nvidia_api_key:
+        headers["Authorization"] = f"Bearer {settings.vllm.nvidia_api_key}"
 
     try:
         response = await asyncio.wait_for(
             http_client.post(
                 f"{settings.vllm.classifier_url}/v1/chat/completions",
                 json={
-                    "model": "meta-llama/Llama-Guard-3-8B",
+                    "model": settings.vllm.classifier_model,
                     "messages": [{"role": "assistant", "content": draft_reply_text}],
                     "temperature": 0.0,
                     "max_tokens": 16,
                 },
+                headers=headers,
                 timeout=3.0,
             ),
             timeout=3.0,

@@ -1,0 +1,103 @@
+{
+  "total": 19,
+  "passed": 18,
+  "failed": 1,
+  "verdict": "FAIL",
+  "details": [
+    {
+      "test": "Demo Endpoint - role='learner'",
+      "passed": true,
+      "detail": "Returned valid signed learner JWT"
+    },
+    {
+      "test": "Demo Endpoint - role='guardian'",
+      "passed": true,
+      "detail": "Returned valid signed guardian JWT"
+    },
+    {
+      "test": "Demo Endpoint - role='admin'",
+      "passed": true,
+      "detail": "Returned valid signed admin JWT"
+    },
+    {
+      "test": "Demo Endpoint - role='hacker' (invalid)",
+      "passed": true,
+      "detail": "Status code 422 returned: Invalid role 'hacker'. Must be 'learner', 'guardian', or 'admin'."
+    },
+    {
+      "test": "Demo Endpoint - missing role field",
+      "passed": false,
+      "detail": "Expected 422, got 200"
+    },
+    {
+      "test": "Login Endpoint - Learner login",
+      "passed": true,
+      "detail": "Successfully issued token for learner"
+    },
+    {
+      "test": "Login Endpoint - Guardian login",
+      "passed": true,
+      "detail": "Successfully issued token for guardian"
+    },
+    {
+      "test": "Login Endpoint - Admin login",
+      "passed": true,
+      "detail": "Successfully issued token for admin"
+    },
+    {
+      "test": "Login Endpoint - role='hacker'",
+      "passed": true,
+      "detail": "Status code 422 returned"
+    },
+    {
+      "test": "Login Endpoint - missing email",
+      "passed": true,
+      "detail": "Status code 422 returned"
+    },
+    {
+      "test": "Login Endpoint - missing password",
+      "passed": true,
+      "detail": "Status code 422 returned"
+    },
+    {
+      "test": "Login Endpoint - empty payload",
+      "passed": true,
+      "detail": "Pydantic validation rejected empty payload (422)"
+    },
+    {
+      "test": "JWT Validation - Valid token",
+      "passed": true,
+      "detail": "Successfully decoded and verified valid token"
+    },
+    {
+      "test": "JWT Security - Payload tamper attempt",
+      "passed": true,
+      "detail": "Signature verification correctly rejected tampered token with 401"
+    },
+    {
+      "test": "JWT Security - Signature tamper attempt",
+      "passed": true,
+      "detail": "Signature check rejected invalid signature with 401"
+    },
+    {
+      "test": "JWT Security - Expired token rejection",
+      "passed": true,
+      "detail": "Expired token rejected with 401 detail='Token has expired'"
+    },
+    {
+      "test": "RBAC Security - Guardian token on /api/v1/turn",
+      "passed": true,
+      "detail": "403 Forbidden correctly returned"
+    },
+    {
+      "test": "RBAC Security - Learner token on /api/v1/guardian/overview",
+      "passed": true,
+      "detail": "403 Forbidden correctly returned"
+    },
+    {
+      "test": "RBAC Security - Guardian token on /api/v1/admin/overview",
+      "passed": true,
+      "detail": "403 Forbidden correctly returned"
+    }
+  ]
+}

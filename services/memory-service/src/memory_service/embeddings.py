@@ -139,3 +139,66 @@ class MockRerankerClient(RerankerClient):
         # Sort descending by rerank_score and return top_k
         scored_candidates.sort(key=lambda x: x.rerank_score, reverse=True)
         return scored_candidates[:top_k]
+
+
+class CrossEncoderRerankerClient(RerankerClient):
+    """
+    Production cross-encoder reranker leveraging a Text Embeddings Inference (TEI) compatible endpoint.
+    Scores candidates in batch to respect latency budgets.
+    """
+
+    def __init__(
+        self,
+        base_url: str = "http://localhost:8080",
+        model: str = "BAAI/bge-reranker-v2-m3",
+        http_client: httpx.AsyncClient | None = None,
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self._http_client = http_client
+
+    async def rerank(
+        self, query: str, candidates: list[ScoredMemoryItem], top_k: int = 5
+    ) -> list[ScoredMemoryItem]:
+        if not candidates:
+            return []
+
+        client = self._http_client or httpx.AsyncClient()
+        close_client = self._http_client is None
+
+        try:
+            payload = {
+                "model": self.model,
+                "query": query,
+                "texts": [c.content for c in candidates],
+            }
+            # Target HF Text Embeddings Inference (TEI) / Cohere compatible endpoint
+            response = await client.post(
+                f"{self.base_url}/rerank",
+                json=payload,
+                timeout=1.5,  # Strict latency budget per PRD
+            )
+            response.raise_for_status()
+            results = response.json()
+
+            # Assign scores back to candidates based on index
+            for res in results:
+                idx = res["index"]
+                candidates[idx].rerank_score = float(res["score"])
+
+            # Fallback for candidates missing scores
+            for c in candidates:
+                if not hasattr(c, "rerank_score"):
+                    c.rerank_score = -999.0
+
+            candidates.sort(key=lambda x: x.rerank_score, reverse=True)
+            return candidates[:top_k]
+        except Exception:
+            # Fallback to base RRF if reranker fails to ensure fail-soft behavior
+            for c in candidates:
+                c.rerank_score = c.rrf_score
+            candidates.sort(key=lambda x: x.rerank_score, reverse=True)
+            return candidates[:top_k]
+        finally:
+            if close_client:
+                await client.aclose()

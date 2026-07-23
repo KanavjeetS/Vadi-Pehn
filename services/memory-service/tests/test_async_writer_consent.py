@@ -110,3 +110,34 @@ async def test_writer_async_background_task_scheduling():
     assert isinstance(task, asyncio.Task)
     res = await task
     assert len(res) == 1
+
+
+@pytest.mark.asyncio
+async def test_writer_saves_child_vadi_dialogue_format():
+    mock_conn = MockAsyncpgConnection()
+    mock_pool = MockAsyncpgPool(mock_conn)
+    mock_conn.fetchval_returns = [UUID("10000000-0000-0000-0000-000000000001")]
+
+    writer = AsyncMemoryWriter(
+        pool=mock_pool, consent_checker=MockConsentChecker(is_active=True)
+    )
+
+    dialogue_content = "Child: What is gravity?\nVadi: Gravity is the force that pulls objects toward each other."
+    task = writer.write_memory_async(
+        tenant_id=UUID("11111111-1111-1111-1111-111111111111"),
+        learner_id=UUID("22222222-2222-2222-2222-222222222222"),
+        content=dialogue_content,
+    )
+
+    res = await task
+    assert len(res) == 1
+
+    fetchval_calls = mock_conn.fetchval_queries
+    assert len(fetchval_calls) > 0
+    sql, args = fetchval_calls[0]
+    assert "INSERT INTO learner_memories" in sql
+    saved_chunk = str(args[4])
+    assert "Child: What is gravity?" in saved_chunk
+    assert "Vadi: Gravity is the force that pulls objects" in saved_chunk
+
+

@@ -27,6 +27,9 @@ from panel_service.models import (
 from panel_service.slm_ocr import QwenSLMOCRService
 from safety_proxy.client import NeMoSafetyClient
 from services.config import require_internal_service_token
+from services.logging_config import configure_logging
+
+configure_logging("panel-service")
 
 app = FastAPI(
     title="Vadi-Pehn Panel Service",

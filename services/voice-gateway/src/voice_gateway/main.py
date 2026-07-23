@@ -19,15 +19,19 @@ sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "safety-proxy", "src")
 )
 
-from services.config import settings
-from safety_proxy.client import NeMoSafetyClient
-from voice_gateway.models import VoiceTurnRequest, VoiceTurnResponse
-from voice_gateway.pipeline import VoiceTurnPipeline
-from voice_gateway.vad import MockVADService, SileroVADService
-from voice_gateway.stt import MockSTTService, WhisperSTTService
-from voice_gateway.tts import KokoroTTSService, MockTTSService, PiperTTSService
-from voice_gateway.room_manager import MockRoomManager, ProductionLiveKitRoomManager
-from voice_gateway.orchestration_client import RemoteOrchestrationClient
+from services.config import settings  # noqa: E402
+from services.logging_config import configure_logging  # noqa: E402
+
+configure_logging("voice-gateway")
+
+from safety_proxy.client import NeMoSafetyClient  # noqa: E402
+from voice_gateway.models import VoiceTurnRequest, VoiceTurnResponse  # noqa: E402
+from voice_gateway.pipeline import VoiceTurnPipeline  # noqa: E402
+from voice_gateway.vad import MockVADService, SileroVADService  # noqa: E402
+from voice_gateway.stt import MockSTTService, WhisperSTTService  # noqa: E402
+from voice_gateway.tts import KokoroTTSService, MockTTSService, PiperTTSService  # noqa: E402
+from voice_gateway.room_manager import MockRoomManager, ProductionLiveKitRoomManager  # noqa: E402
+from voice_gateway.orchestration_client import RemoteOrchestrationClient  # noqa: E402
 
 app = FastAPI(
     title="Vadi-Pehn Voice Gateway",
@@ -35,7 +39,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
-from voice_gateway.providers import ElevenLabsTTSService, GroqSTTService
+from voice_gateway.providers import ElevenLabsTTSService, GroqSTTService  # noqa: E402
 
 # Development stays hermetic; pilot/production uses the configured network services.
 if settings.is_dev:
