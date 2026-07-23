@@ -72,15 +72,24 @@ On the login page, click **Demo: Child**, **Demo: Guardian**, or **Demo: Admin**
 - A configured `.env` file with all required keys
 
 ### 1. Configure environment
-```bash
-cp .env.example .env
+```powershell
+Copy-Item .env.example .env
 # Edit .env — set ENVIRONMENT=production, fill DB credentials and API keys
 ```
 
 ### 2. Build and start
-```bash
-make docker-build    # Build all 9 service images (parallel)
-make docker-up       # Start the full stack detached
+```powershell
+# Windows (PowerShell):
+.\vadi.ps1 docker-build    # Build all 9 Docker images (parallel)
+.\vadi.ps1 docker-up       # Start the full stack detached
+
+# Direct Docker commands (any OS):
+docker compose build --parallel
+docker compose up -d
+
+# Linux/macOS (Make):
+make docker-build
+make docker-up
 ```
 
 ### 3. Access the app
@@ -92,14 +101,14 @@ make docker-up       # Start the full stack detached
 | 🛡️ Safety Proxy | http://localhost:8002 |
 
 ### 4. Check health
-```bash
-make health-docker   # Show Docker container status
-make health          # Curl all /health endpoints
+```powershell
+.\vadi.ps1 health-docker   # Show Docker container status
+.\vadi.ps1 health          # Check all /health endpoints
 ```
 
 ### 5. View logs
-```bash
-make docker-logs           # All services
+```powershell
+.\vadi.ps1 docker-logs     # All services
 docker compose logs -f api-gateway   # Single service
 ```
 
