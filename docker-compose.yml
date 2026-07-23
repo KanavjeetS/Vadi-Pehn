@@ -1,6 +1,52 @@
-version: "3.8"
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Vadi-Pehn — Production Docker Compose
+#  All services share the vadi-network so they resolve each other by name.
+#  All Python services internally listen on :8000; host ports are for tooling.
+#  Webapp is served by nginx on :80 which also reverse-proxies /api/* to
+#  the api-gateway container.
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  vadi-network:
+    driver: bridge
+
+# ── Shared environment for inter-container service discovery ─────────────────
+x-internal-urls: &internal-urls
+  SAFETY_PROXY_URL:       "http://safety-proxy:8000"
+  ORCHESTRATION_URL:      "http://orchestration:8000"
+  VOICE_GATEWAY_URL:      "http://voice-gateway:8000"
+  MEMORY_SERVICE_URL:     "http://memory-service:8000"
+  GOVERNANCE_SERVICE_URL: "http://governance-service:8000"
+  PANEL_SERVICE_URL:      "http://panel-service:8000"
+  DASHBOARD_BFF_URL:      "http://dashboard-bff:8000"
+  INGESTION_SERVICE_URL:  "http://ingestion-service:8000"
 
 services:
+
+  # ── Nginx — Static webapp + API reverse-proxy ──────────────────────────────
+  webapp:
+    image: nginx:1.27-alpine
+    container_name: vadi-webapp
+    ports:
+      - "80:80"
+    volumes:
+      - ./webapp:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    networks:
+      - vadi-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── API Gateway — unified entry point, auth, rate limiting ─────────────────
   api-gateway:
     build:
       context: .
@@ -11,8 +57,9 @@ services:
     env_file:
       - .env
     environment:
-      - SERVICE_NAME=api-gateway
-      - PORT=8000
+      <<: *internal-urls
+      SERVICE_NAME: api-gateway
+      PORT: "8000"
     depends_on:
       orchestration:
         condition: service_healthy
@@ -20,25 +67,30 @@ services:
         condition: service_healthy
       governance-service:
         condition: service_healthy
+    networks:
+      - vadi-network
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')\""]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
+  # ── Orchestration — LangGraph conversation engine ──────────────────────────
   orchestration:
     build:
       context: .
       dockerfile: services/orchestration/Dockerfile
     container_name: vadi-orchestration
     ports:
-      - "8001:8001"
+      - "8001:8000"
     env_file:
       - .env
     environment:
-      - SERVICE_NAME=orchestration
-      - PORT=8001
+      <<: *internal-urls
+      SERVICE_NAME: orchestration
+      PORT: "8000"
     depends_on:
       safety-proxy:
         condition: service_healthy
@@ -46,158 +98,190 @@ services:
         condition: service_healthy
       governance-service:
         condition: service_healthy
+    networks:
+      - vadi-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 25s
     restart: unless-stopped
 
+  # ── Safety Proxy — NeMo Guardrails, fail-closed ────────────────────────────
   safety-proxy:
     build:
       context: .
       dockerfile: services/safety-proxy/Dockerfile
     container_name: vadi-safety-proxy
     ports:
-      - "8002:8002"
+      - "8002:8000"
     env_file:
       - .env
     environment:
-      - SERVICE_NAME=safety-proxy
-      - PORT=8002
+      SERVICE_NAME: safety-proxy
+      PORT: "8000"
+    networks:
+      - vadi-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
+  # ── Memory Service — pgvector RAG + RLS ───────────────────────────────────
   memory-service:
     build:
       context: .
       dockerfile: services/memory-service/Dockerfile
     container_name: vadi-memory-service
     ports:
-      - "8003:8003"
+      - "8003:8000"
     env_file:
       - .env
     environment:
-      - SERVICE_NAME=memory-service
-      - PORT=8003
+      SERVICE_NAME: memory-service
+      PORT: "8000"
+    networks:
+      - vadi-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
+  # ── Governance Service — Consent Ledger (separate DB) ─────────────────────
   governance-service:
     build:
       context: .
       dockerfile: services/governance-service/Dockerfile
     container_name: vadi-governance-service
     ports:
-      - "8004:8004"
+      - "8004:8000"
     env_file:
       - .env
     environment:
-      - SERVICE_NAME=governance-service
-      - PORT=8004
+      SERVICE_NAME: governance-service
+      PORT: "8000"
+    networks:
+      - vadi-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8004/health')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
+  # ── Panel Service — Career Mentor Personas ─────────────────────────────────
   panel-service:
     build:
       context: .
       dockerfile: services/panel-service/Dockerfile
     container_name: vadi-panel-service
     ports:
-      - "8005:8005"
+      - "8005:8000"
     env_file:
       - .env
     environment:
-      - SERVICE_NAME=panel-service
-      - PORT=8005
+      SERVICE_NAME: panel-service
+      PORT: "8000"
     depends_on:
       safety-proxy:
         condition: service_healthy
+    networks:
+      - vadi-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8005/health')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
+  # ── Dashboard BFF — Guardian & Admin overview queries ─────────────────────
   dashboard-bff:
     build:
       context: .
       dockerfile: services/dashboard-bff/Dockerfile
     container_name: vadi-dashboard-bff
     ports:
-      - "8006:8006"
+      - "8006:8000"
     env_file:
       - .env
     environment:
-      - SERVICE_NAME=dashboard-bff
-      - PORT=8006
+      SERVICE_NAME: dashboard-bff
+      PORT: "8000"
     depends_on:
       governance-service:
         condition: service_healthy
       memory-service:
         condition: service_healthy
+    networks:
+      - vadi-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8006/health')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
+  # ── Ingestion Service — OCR + document embedding pipeline ─────────────────
   ingestion-service:
     build:
       context: .
       dockerfile: services/ingestion-service/Dockerfile
     container_name: vadi-ingestion-service
     ports:
-      - "8007:8007"
+      - "8007:8000"
     env_file:
       - .env
     environment:
-      - SERVICE_NAME=ingestion-service
-      - PORT=8007
+      SERVICE_NAME: ingestion-service
+      PORT: "8000"
     depends_on:
       governance-service:
         condition: service_healthy
+    networks:
+      - vadi-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8007/health')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
+  # ── Voice Gateway — ElevenLabs TTS + STT pipeline ─────────────────────────
   voice-gateway:
     build:
       context: .
       dockerfile: services/voice-gateway/Dockerfile
     container_name: vadi-voice-gateway
     ports:
-      - "8008:8008"
+      - "8008:8000"
     env_file:
       - .env
     environment:
-      - SERVICE_NAME=voice-gateway
-      - PORT=8008
+      <<: *internal-urls
+      SERVICE_NAME: voice-gateway
+      PORT: "8000"
     depends_on:
       orchestration:
         condition: service_healthy
       safety-proxy:
         condition: service_healthy
+    networks:
+      - vadi-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8008/health')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
