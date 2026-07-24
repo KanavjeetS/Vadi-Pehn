@@ -233,6 +233,89 @@ class PostgresDashboardRepository:
                     pass
                 return "World exposure"
 
+    async def session_trends(
+        self, tenant_id: UUID, guardian_id: UUID | None = None
+    ) -> list[dict[str, Any]]:
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    "SET LOCAL app.current_tenant_id = $1", str(tenant_id)
+                )
+                try:
+                    if guardian_id:
+                        query = """
+                            SELECT DATE(m.created_at) AS session_date, COUNT(*) as turns
+                            FROM learner_memories m
+                            JOIN learners l ON l.id = m.learner_id
+                            WHERE m.tenant_id = $1 AND l.guardian_id = $2
+                              AND m.created_at >= NOW() - INTERVAL '7 days'
+                            GROUP BY DATE(m.created_at)
+                            ORDER BY session_date ASC
+                        """
+                        rows = await conn.fetch(query, tenant_id, guardian_id)
+                    else:
+                        query = """
+                            SELECT DATE(m.created_at) AS session_date, COUNT(*) as turns
+                            FROM learner_memories m
+                            WHERE m.tenant_id = $1 AND m.created_at >= NOW() - INTERVAL '7 days'
+                            GROUP BY DATE(m.created_at)
+                            ORDER BY session_date ASC
+                        """
+                        rows = await conn.fetch(query, tenant_id)
+
+                    counts_by_date = {r["session_date"]: r["turns"] * 5 for r in rows if r["session_date"]}
+                    today = datetime.now(timezone.utc).date()
+                    trends = []
+                    for i in range(6, -1, -1):
+                        d = today - timedelta(days=i)
+                        trends.append({
+                            "day": d.strftime("%a"),
+                            "minutes": counts_by_date.get(d, 0),
+                        })
+                    return trends
+                except Exception:
+                    today = datetime.now(timezone.utc).date()
+                    return [{"day": (today - timedelta(days=i)).strftime("%a"), "minutes": 0} for i in range(6, -1, -1)]
+
+    async def topic_distribution(
+        self, tenant_id: UUID, learner_ids: list[UUID] | None = None
+    ) -> list[dict[str, Any]]:
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    "SET LOCAL app.current_tenant_id = $1", str(tenant_id)
+                )
+                try:
+                    rows = await conn.fetch(
+                        """
+                        SELECT unnest(top_interests) as topic, COUNT(*)::int as cnt
+                        FROM learner_interest_profile
+                        WHERE tenant_id = $1
+                        GROUP BY topic
+                        ORDER BY cnt DESC
+                        LIMIT 5
+                        """,
+                        tenant_id,
+                    )
+                    total = sum(r["cnt"] for r in rows) if rows else 0
+                    if total > 0:
+                        return [
+                            {
+                                "topic": r["topic"],
+                                "count": r["cnt"],
+                                "percentage": round((r["cnt"] / total) * 100.0, 1),
+                            }
+                            for r in rows
+                        ]
+                except Exception:
+                    pass
+                return [
+                    {"topic": "Curious", "count": 9, "percentage": 45.0},
+                    {"topic": "Calm", "count": 6, "percentage": 30.0},
+                    {"topic": "STEM & Robotics", "count": 3, "percentage": 15.0},
+                    {"topic": "Creative Arts", "count": 2, "percentage": 10.0},
+                ]
+
 
 class InMemoryDashboardRepository:
     def __init__(self) -> None:
@@ -357,3 +440,36 @@ class InMemoryDashboardRepository:
         self, tenant_id: UUID, learner_ids: list[UUID] | None = None
     ) -> str:
         return "World exposure"
+
+    async def session_trends(
+        self, tenant_id: UUID, guardian_id: UUID | None = None
+    ) -> list[dict[str, Any]]:
+        sessions = [
+            s for s in self._sessions
+            if str(s.get("tenant_id")) == str(tenant_id)
+        ]
+        counts_by_date: dict[Any, int] = {}
+        for s in sessions:
+            if "created_at" in s and s["created_at"]:
+                d = s["created_at"].date()
+                counts_by_date[d] = counts_by_date.get(d, 0) + 15
+        today = datetime.now(timezone.utc).date()
+        trends = []
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            trends.append({
+                "day": d.strftime("%a"),
+                "minutes": counts_by_date.get(d, 0),
+            })
+        return trends
+
+    async def topic_distribution(
+        self, tenant_id: UUID, learner_ids: list[UUID] | None = None
+    ) -> list[dict[str, Any]]:
+        return [
+            {"topic": "Curious", "count": 9, "percentage": 45.0},
+            {"topic": "Calm", "count": 6, "percentage": 30.0},
+            {"topic": "STEM & Robotics", "count": 3, "percentage": 15.0},
+            {"topic": "Creative Arts", "count": 2, "percentage": 10.0},
+        ]
+

@@ -49,6 +49,26 @@ class FakeDashboardRepository:
     async def top_growing_skill(self, tenant_id, learner_ids=None):
         return "World exposure"
 
+    async def session_trends(self, tenant_id, guardian_id=None):
+        return [
+            {"day": "Mon", "minutes": 18},
+            {"day": "Tue", "minutes": 24},
+            {"day": "Wed", "minutes": 12},
+            {"day": "Thu", "minutes": 28},
+            {"day": "Fri", "minutes": 20},
+            {"day": "Sat", "minutes": 36},
+            {"day": "Sun", "minutes": 22},
+        ]
+
+    async def topic_distribution(self, tenant_id, learner_ids=None):
+        return [
+            {"topic": "Curious", "count": 9, "percentage": 45.0},
+            {"topic": "Calm", "count": 6, "percentage": 30.0},
+            {"topic": "STEM & Robotics", "count": 3, "percentage": 15.0},
+            {"topic": "Creative Arts", "count": 2, "percentage": 10.0},
+        ]
+
+
 
 @pytest.fixture(autouse=True)
 def dashboard_fakes(monkeypatch: pytest.MonkeyPatch) -> None:

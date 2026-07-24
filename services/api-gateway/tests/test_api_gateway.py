@@ -136,3 +136,46 @@ def test_rate_limiting():
         check_rate_limit(client_id)
     assert exc_info.value.status_code == 429
 
+
+def test_voice_turn_endpoint_authorized():
+    tenant_id = str(uuid.uuid4())
+    learner_id = str(uuid.uuid4())
+    token = create_jwt_token(user_id=learner_id, tenant_id=tenant_id, role="learner")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "session_id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "learner_id": learner_id,
+        "age_band": 2,
+        "text_fallback": "Namaste Vadi! Drones ke baare mein batao.",
+        "language": "hi"
+    }
+    res = client.post("/api/v1/voice/turn", json=payload, headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["safety_verdict"] == "safe"
+    assert "reply_text" in data
+    assert "audio_response_base64" in data
+
+
+def test_voice_turn_endpoint_unauthorized():
+    payload = {
+        "session_id": str(uuid.uuid4()),
+        "tenant_id": str(uuid.uuid4()),
+        "learner_id": str(uuid.uuid4()),
+        "age_band": 2,
+        "text_fallback": "Hello",
+    }
+    res = client.post("/api/v1/voice/turn", json=payload)
+    assert res.status_code == 401
+
+
+def test_voice_tts_endpoint():
+    payload = {"text": "Namaste Vadi!", "language": "hi"}
+    res = client.post("/api/v1/voice/tts", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] in ("success", "fallback", "empty")
+
+

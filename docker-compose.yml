@@ -22,6 +22,8 @@ x-internal-urls: &internal-urls
   PANEL_SERVICE_URL:      "http://panel-service:8000"
   DASHBOARD_BFF_URL:      "http://dashboard-bff:8000"
   INGESTION_SERVICE_URL:  "http://ingestion-service:8000"
+  MEMORY_DB_HOST:         "postgres-memory"
+  GOVERNANCE_DB_HOST:     "postgres-governance"
 
 services:
 
@@ -142,8 +144,12 @@ services:
     env_file:
       - .env
     environment:
+      <<: *internal-urls
       SERVICE_NAME: memory-service
       PORT: "8000"
+    depends_on:
+      postgres-memory:
+        condition: service_healthy
     networks:
       - vadi-network
     healthcheck:
@@ -165,8 +171,12 @@ services:
     env_file:
       - .env
     environment:
+      <<: *internal-urls
       SERVICE_NAME: governance-service
       PORT: "8000"
+    depends_on:
+      postgres-governance:
+        condition: service_healthy
     networks:
       - vadi-network
     healthcheck:
@@ -285,3 +295,52 @@ services:
       retries: 5
       start_period: 20s
     restart: unless-stopped
+
+  # ── Postgres — Memory Database (pgvector) ──────────────────────────────────
+  postgres-memory:
+    image: pgvector/pgvector:pg16
+    container_name: vadi-postgres-memory
+    environment:
+      POSTGRES_DB: vadi_memory
+      POSTGRES_USER: vadi_app
+      POSTGRES_PASSWORD: ${MEMORY_DB_PASSWORD:-secret_memory_pass}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_memory_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - vadi-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vadi_app -d vadi_memory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Postgres — Governance Database (Physically Isolated Instance) ──────────
+  postgres-governance:
+    image: postgres:16-alpine
+    container_name: vadi-postgres-governance
+    environment:
+      POSTGRES_DB: vadi_governance
+      POSTGRES_USER: vadi_gov_app
+      POSTGRES_PASSWORD: ${GOVERNANCE_DB_PASSWORD:-secret_gov_pass}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_governance_data:/var/lib/postgresql/data
+      - ./db/migrations/governance:/docker-entrypoint-initdb.d:ro
+    networks:
+      - vadi-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vadi_gov_app -d vadi_governance"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_memory_data:
+  postgres_governance_data:
+

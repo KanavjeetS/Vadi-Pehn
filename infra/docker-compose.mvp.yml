@@ -1,3 +1,8 @@
+# DEPRECATED — DO NOT USE FOR PRIMARY DEPLOYMENTS
+# Canonical production docker-compose definition is located at root: ../docker-compose.yml
+# To run full stack: .\vadi.ps1 docker-up (or docker compose -f docker-compose.yml up -d)
+# Legacy GPU pilot reference file kept for reference only.
+#
 version: "3.8"
 
 networks:

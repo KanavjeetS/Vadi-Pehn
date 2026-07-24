@@ -1,5 +1,9 @@
 import asyncio
+import os
+import sys
 from pathlib import Path
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from sibling_training.abstractions import SFTConfig
 from sibling_training.sft_trainer import NanochatSFTTrainer

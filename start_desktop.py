@@ -52,6 +52,7 @@ from orchestration.main import app as orchestration_app, lifespan as orchestrati
 from governance_service.main import app as governance_app, lifespan as governance_lifespan  # noqa: E402
 from panel_service.main import app as panel_app  # noqa: E402
 from safety_proxy.main import app as safety_proxy_app  # noqa: E402
+from memory_service.main import app as memory_app, lifespan as memory_lifespan  # noqa: E402
 
 
 from db.seed_synthetic_data import seed_all  # noqa: E402
@@ -64,6 +65,7 @@ async def desktop_lifespan(app: FastAPI):
         await stack.enter_async_context(governance_lifespan(governance_app))
         await stack.enter_async_context(dashboard_lifespan(dashboard_app))
         await stack.enter_async_context(api_gateway_lifespan(api_gateway_app))
+        await stack.enter_async_context(memory_lifespan(memory_app))
         try:
             await seed_all()
         except Exception as exc:
@@ -97,6 +99,7 @@ sub_apps = [
     panel_app,
     safety_proxy_app,
     ingestion_app,
+    memory_app,
 ]
 
 for sub_app in sub_apps:

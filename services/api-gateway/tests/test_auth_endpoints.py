@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from api_gateway.auth import decode_jwt_token
 from api_gateway.main import app
+from services.config import settings
 
 client = TestClient(app)
 
@@ -176,8 +177,9 @@ def test_auth_signup_learner():
 
 
 def test_auth_cors_options_preflight():
+    allowed_origin = settings.cors_allowed_origins.split(",")[0].strip() or "http://localhost:3000"
     headers = {
-        "Origin": "http://localhost:3000",
+        "Origin": allowed_origin,
         "Access-Control-Request-Method": "POST",
         "Access-Control-Request-Headers": "Content-Type",
     }

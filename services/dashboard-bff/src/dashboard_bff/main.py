@@ -144,6 +144,8 @@ async def get_guardian_overview(
         streak_str = await dashboard_repo.learner_streak(tenant_id, guardian_id)
         weekly_engagement_str = await dashboard_repo.weekly_engagement(tenant_id, guardian_id)
         top_skill = await dashboard_repo.top_growing_skill(tenant_id, learner_ids)
+        session_trends = await dashboard_repo.session_trends(tenant_id, guardian_id)
+        topic_distribution = await dashboard_repo.topic_distribution(tenant_id, learner_ids)
 
         consent = await _get_json(
             f"{settings.governance.url.rstrip('/')}/internal/v1/governance/consent/summary/{tenant_id}",
@@ -205,6 +207,8 @@ async def get_guardian_overview(
         top_growing_skill=top_skill,
         consent_status=consent,
         safety_incidents=incidents,
+        session_trends=session_trends,
+        topic_distribution=topic_distribution,
     )
 
 

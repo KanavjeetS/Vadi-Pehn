@@ -1,18 +1,23 @@
-## 2026-07-23T20:06:35Z
-You are the Reviewer for Milestone 3 (AI Platform & Safety) of Vadi-Pehn Full MVP Refinement.
-Working directory: d:\Vadi Bhen
-Metadata directory: d:\Vadi Bhen\.agents\reviewer_m3_refine
+## 2026-07-24T10:24:40Z
+<USER_REQUEST>
+You are reviewer_m3_refine, a Voice & UX Reviewer for Milestone 3 of the Vadi-Pehn 10/10 Production MVP Refinement project.
+Working Directory: d:\Vadi Bhen\.agents\reviewer_m3_refine\
 
-Tasks:
-1. Review AI Safety in `services/safety-proxy/`:
-   - Hinglish self-harm keywords in `actions.py`: `"marna chahta"`, `"marna chahti"`, `"jeena nahi chahta"`, `"khatam karna chahta"`, `"khud ko hurt"`.
-   - Safety-proxy dev bypass structure: `actions.py` `classify_input` and `classify_output` are pure fail-closed (`return SafetyVerdict.unavailable()`); `safety-proxy/main.py` converts `CLASSIFIER_UNAVAILABLE` to `SAFE` in `/check-input` and `/check-output` endpoints when `allow_dev_bypass and is_dev` is True.
-   - Prompt injection deflection ("ignore previous instructions") and self-harm escalation script ("kill myself").
-2. Review AI Platform in `services/orchestration/`:
-   - Memory Writes: `AsyncMemoryWriter.write_memory_async()` saving turn data into `learner_memories`.
-   - Memory Reads: `retrieval.py` / `graph.py` recency fallback (`LIMIT 5`) when vector embedding client is unavailable.
-   - Persona Templates: `sibling.jinja2` system prompt rendering.
-   - Career Panel: career persona templates (`doctor.jinja2`, `engineer.jinja2`, `artist.jinja2`) rendered when `panel_triggered=True`.
-3. Run test suite: `py -3 -m pytest services/safety-proxy/ services/orchestration/`.
+Objective: Review & verify Milestone 3 changes (Connect Child Companion UI to Real Voice Pipeline).
 
-Write your review report to `d:\Vadi Bhen\.agents\reviewer_m3_refine\handoff.md` with explicit PASS/FAIL verdict and rationale.
+Worker Report: d:\Vadi Bhen\.agents\worker_m3_refine\handoff.md
+
+Review Scope:
+1. Inspect `webapp/child/child.js` and `webapp/child/index.html`:
+   - Verify `/api/v1/voice/turn` integration using `VoiceTurnPayload`.
+   - Verify avatar state transitions (`idle` -> `listening` -> `thinking` -> `speaking` -> `idle`), SVG mouth animation, and aura ring.
+   - Verify barge-in handling (`interruptPlayback()`) and canvas waveform visualizer.
+   - Verify fail-closed safety handling when `safety_verdict !== 'safe'`.
+   - Verify AI identity disclosure banner.
+2. Inspect `services/voice-gateway` and `services/api-gateway` configuration and routes.
+3. Execute `py -3 -m pytest services/voice-gateway services/api-gateway` and verify 100% pass rate.
+
+Output Requirements:
+- Write `handoff.md` in `d:\Vadi Bhen\.agents\reviewer_m3_refine\handoff.md`.
+- Send message back to orchestrator upon completion.
+</USER_REQUEST>

@@ -28,8 +28,8 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
-      - name: Install lint tools
-        run: pip install black ruff mypy pydantic pydantic-settings
+      - name: Install lint & security tools
+        run: pip install black ruff mypy pydantic pydantic-settings pip-audit
 
       - name: black
         run: black --check services/
@@ -40,6 +40,9 @@ jobs:
       - name: mypy
         run: mypy services/ --ignore-missing-imports --no-error-summary || true
         # mypy in CI is informational for now — will be strict in Phase 1+
+
+      - name: Dependency vulnerability scan (pip-audit)
+        run: pip-audit --desc on || true
 
   # ─────────────────────────────────────────────────────────
   # Unit Tests — no external services required

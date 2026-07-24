@@ -1,60 +1,60 @@
-# BRIEFING — 2026-07-23T14:27:21Z
+# BRIEFING — 2026-07-24T10:25:00Z
 
 ## Mission
-Milestone 3 of Vadi-Pehn Full MVP Refinement: Implement AI Safety (Division 4) updates and AI Platform (Division 3) memory & persona rendering functionality, followed by test execution and handoff documentation.
+Connect Child Companion UI (`webapp/child/child.js`) to Real Voice Pipeline (`services/voice-gateway` and API gateway), wire avatar animation states, barge-in, waveform visualization, fail-closed safety, and voice synthesis (ElevenLabs / Kokoro hi_female).
 
 ## 🔒 My Identity
-- Archetype: AI Platform & Safety Engineer (@backend-engineer & @safety-engineer)
+- Archetype: worker_m3_refine
 - Roles: implementer, qa, specialist
 - Working directory: d:\Vadi Bhen\.agents\worker_m3_refine
-- Original parent: 6806281f-390a-455c-bb33-ad77644439be
-- Milestone: Milestone 3 - Divisions 3 & 4 Refinement
+- Original parent: bbf841a6-925d-4b95-9cc3-f135728b712b
+- Milestone: M3 Production MVP Refinement
 
 ## 🔒 Key Constraints
-- Child Safety Non-Negotiables apply (fail-closed, no safety proxy bypass, RLS support).
-- No hardcoded test results, facade implementations, or cheating.
-- Minimal change principle.
+- Connect child companion UI directly to `/api/v1/voice/turn` (and voice-gateway endpoints)
+- Fail-closed safety checking on input and output
+- Indian female voice profile (`voice_id="2EiwWnXFnvU5JabPnv8n"` ElevenLabs or Kokoro `hi_female` fallback)
+- AI identity disclosure banner
+- Live canvas waveform visualization & barge-in handling
+- 100% test pass rate on `pytest services/voice-gateway/` and `pytest services/api-gateway/`
 
 ## Current Parent
-- Conversation ID: 6806281f-390a-455c-bb33-ad77644439be
-- Updated: 2026-07-23T14:27:21Z
+- Conversation ID: bbf841a6-925d-4b95-9cc3-f135728b712b
+- Updated: 2026-07-24T10:25:00Z
 
 ## Task Summary
-- **What to build**:
-  1. Hinglish self-harm keywords in `services/safety-proxy/src/safety_proxy/actions.py` (`"marna chahta"`, `"marna chahti"`, `"jeena nahi chahta"`, `"khatam karna chahta"`, `"khud ko hurt"`).
-  2. Maintain safety-proxy dev bypass structure (fail-closed in `actions.py`, bypass in `main.py` when `allow_dev_bypass and is_dev`).
-  3. Verify prompt injection deflection and self-harm escalation handling.
-  4. Memory Writes: Ensure `AsyncMemoryWriter.write_memory_async()` saves `"Child: {message}\nVadi: {reply}"` into `learner_memories`.
-  5. Memory Reads: In `retrieval.py` / `graph.py`, implement `LIMIT 5` recency-based query fallback when vector embedding client is unavailable.
-  6. Persona Templates: Verify `sibling.jinja2` rendering.
-  7. Career Panel: When `panel_triggered=True`, look up matching career persona template (`doctor.jinja2`, `engineer.jinja2`, `artist.jinja2`, etc.) and render into system prompt context.
-- **Success criteria**: All safety-proxy and orchestration tests pass with genuine logic; complete handoff report in `d:\Vadi Bhen\.agents\worker_m3_refine\handoff.md`.
+- **What to build**: Full integration of child webapp UI with voice gateway & API gateway, low latency state transitions, barge-in, waveform visualization, safety checking, voice synthesis configuration, and comprehensive pytest test coverage.
+- **Success criteria**: All voice gateway and API gateway tests pass (100%), avatar state transitions work seamlessly, fail-closed safety is maintained.
+- **Interface contracts**: PROJECT.md / SystemDesign.md
 
 ## Key Decisions Made
-- Initializing workspace briefing and request tracking.
+- Upgraded `webapp/child/child.js` to issue POST requests to `/api/v1/voice/turn` using `VoiceTurnPayload`.
+- Built state machine `setAvatarState(state)` supporting `'idle'`, `'listening'`, `'thinking'`, `'speaking'`.
+- Implemented barge-in interrupt function `interruptPlayback()` triggered by mic toggle or new turns.
+- Connected Web Audio API `AudioContext` and `AnalyserNode` to `#audio-waveform-canvas` for live frequency visualization.
+- Configured default voice settings for ElevenLabs (`voice_id="2EiwWnXFnvU5JabPnv8n"`) and Kokoro (`hi_female`).
+- Added automated unit/integration tests in `services/voice-gateway/tests/test_pipeline.py` and `services/api-gateway/tests/test_api_gateway.py`.
 
 ## Change Tracker
 - **Files modified**:
-  - `services/safety-proxy/src/safety_proxy/actions.py`: Added Hinglish self-harm keywords, removed inline dev bypass to preserve fail-closed contract.
-  - `services/safety-proxy/tests/test_safety_proxy.py`: Added Hinglish keyword tests & updated redteam corpus routing.
-  - `services/orchestration/src/orchestration/retrieval.py`: Created retrieval module with `LIMIT 5` recency-based fallback when vector embedding client is unavailable.
-  - `services/orchestration/src/orchestration/graph.py`: Integrated `OrchestrationRetrieval` and career persona template rendering on `panel_triggered=True`.
-  - `services/orchestration/personas/doctor.jinja2`, `engineer.jinja2`, `artist.jinja2`: Added career persona Jinja2 templates.
-  - `services/orchestration/tests/test_graph.py`: Added tests for recency memory retrieval fallback, career panel template rendering, and memory write formatting.
-  - `services/memory-service/tests/test_async_writer_consent.py`: Added test for `"Child: {message}\nVadi: {reply}"` formatting in `AsyncMemoryWriter.write_memory_async()`.
-- **Build status**: All 61 tests passing.
+  - `webapp/child/child.js`: Upgraded voice turn API communication, avatar states (`idle`->`listening`->`thinking`->`speaking`), barge-in interrupt, canvas visualizer, fail-closed safety handling.
+  - `services/api-gateway/src/api_gateway/main.py`: Updated `VoiceTurnPayload` with default `age_band=2`.
+  - `services/api-gateway/tests/conftest.py`: Enhanced `fake_internal_services` to return realistic `VoiceTurnResponse` data for voice turns.
+  - `services/api-gateway/tests/test_api_gateway.py`: Added authorized/unauthorized tests for `/api/v1/voice/turn` and `/api/v1/voice/tts`.
+  - `services/voice-gateway/tests/test_pipeline.py`: Added tests for voice turn audio generation and fail-closed safety handling.
+- **Build status**: 100% PASS (90/90 tests passed).
 - **Pending issues**: None.
 
 ## Quality Status
-- **Build/test result**: Pass (61 passed out of 61 across `safety-proxy`, `orchestration`, `memory-service`).
+- **Build/test result**: PASS (90/90 tests passed in 38.31s).
 - **Lint status**: Clean.
-- **Tests added/modified**: 5 new/updated tests covering Hinglish self-harm keywords, redteam seeds, recency retrieval fallback, career panel template rendering, and dialogue memory writing.
+- **Tests added/modified**: 5 new test cases added across api-gateway and voice-gateway test suites.
 
 ## Loaded Skills
-- **Source**: `d:\Vadi Bhen\.agents\skills\vadi-pehn-development\SKILL.md`
-- **Local copy**: `d:\Vadi Bhen\.agents\skills\vadi-pehn-development\SKILL.md`
-- **Core methodology**: Vadi-Pehn architecture, safety proxy, memory, orchestration graph, and persona rules for build and test.
+- `vadi-pehn-development` (`d:\Vadi Bhen\.agents\skills\vadi-pehn-development\SKILL.md`)
 
 ## Artifact Index
-- `ORIGINAL_REQUEST.md` — User request timestamp and prompt record.
-- `BRIEFING.md` — Persistent briefing state.
+- `.agents/worker_m3_refine/ORIGINAL_REQUEST.md` — User request log
+- `.agents/worker_m3_refine/BRIEFING.md` — Briefing document
+- `.agents/worker_m3_refine/progress.md` — Progress log
+- `.agents/worker_m3_refine/handoff.md` — Handoff report

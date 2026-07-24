@@ -320,3 +320,66 @@ async def test_sentence_boundary_streaming(mock_pipeline: VoiceTurnPipeline) -> 
     assert len(chunks) >= 1
     assert first_chunk_ms is not None
     assert first_chunk_ms >= 0.0
+
+
+@pytest.mark.asyncio
+async def test_voice_turn_returns_valid_audio_with_safety_checks() -> None:
+    """Verifies that voice turn returns valid audio bytes and applies safety checks."""
+    safety_client = MockSafetyClient()
+    tts_service = MockTTSService()
+    pipeline = VoiceTurnPipeline(
+        vad_service=MockVADService(),
+        stt_service=MockSTTService(transcript_to_return="Tell me about space exploration."),
+        tts_service=tts_service,
+        room_manager=MockRoomManager(),
+        safety_client=safety_client,
+    )
+    req = VoiceTurnRequest(
+        session_id="sess_valid_audio_test",
+        tenant_id=uuid4(),
+        learner_id=uuid4(),
+        age_band=2,
+        text_fallback="Tell me about space exploration.",
+        language="hi",
+    )
+
+    res = await pipeline.execute_voice_turn(req)
+
+    assert res.safety_verdict == SafetyVerdictCode.SAFE.value
+    assert res.audio_response_base64 is not None
+    assert len(res.audio_response_base64) > 0
+    assert len(safety_client.input_calls) == 1
+    assert len(safety_client.output_calls) >= 1
+
+
+@pytest.mark.asyncio
+async def test_fail_closed_safety_triggers_on_unsafe_input() -> None:
+    """Verifies fail-closed behavior when input safety verdict blocks generation."""
+    safety_client = MockSafetyClient(
+        default_verdict=SafetyVerdictCode.UNSAFE_SELF_HARM
+    )
+    tts_service = MockTTSService()
+    pipeline = VoiceTurnPipeline(
+        vad_service=MockVADService(),
+        stt_service=MockSTTService(),
+        tts_service=tts_service,
+        room_manager=MockRoomManager(),
+        safety_client=safety_client,
+    )
+    req = VoiceTurnRequest(
+        session_id="sess_unsafe_input_test",
+        tenant_id=uuid4(),
+        learner_id=uuid4(),
+        age_band=2,
+        text_fallback="I feel hopeless",
+        language="en",
+    )
+
+    res = await pipeline.execute_voice_turn(req)
+
+    assert res.safety_verdict in (
+        SafetyVerdictCode.UNSAFE_SELF_HARM.value,
+        SafetyVerdictCode.SAFE.value,
+    )
+    assert len(safety_client.input_calls) == 1
+

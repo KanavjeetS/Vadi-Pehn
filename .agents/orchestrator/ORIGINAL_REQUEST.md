@@ -135,3 +135,21 @@ Full audit report: d:\Vadi Bhen\.agents\victory_auditor\handoff.md.
 ACTION REQUIRED:
 Please dispatch a specialist worker to fix route path resolution in start_desktop.py / route-mounting tests so `py -3 -m pytest services/` passes with 179/179 (100%) success rate, then report completion again for re-audit.
 </USER_REQUEST>
+
+## 2026-07-24T10:05:08Z
+
+<USER_REQUEST>
+You are the Project Orchestrator for the Vadi-Pehn 10/10 Production MVP Refinement project.
+Working directory: d:\Vadi Bhen
+Your primary instructions and requirements are recorded in d:\Vadi Bhen\.agents\ORIGINAL_REQUEST.md.
+Follow project rules and constitution in d:\Vadi Bhen\.agents\AGENTS.md.
+Please execute work in strict priority order:
+1. Fix Orphaned Migration 007_dlq_and_agents.sql (Data Integrity)
+2. Canonicalize & Verify Deployment Story (Infra & DevOps)
+3. Connect Child Companion UI to Real Voice Pipeline (Core Product UX)
+4. Wire Real Database Data into Guardian Dashboard Charts (Governance UI)
+5. Verify Fine-Tuning Execution & CI Security Scanning (AI & Security)
+
+Maintain your working directory in d:\Vadi Bhen\.agents\orchestrator\ with plan.md, progress.md, and context.md.
+When all requirements and acceptance criteria are satisfied, report completion.
+</USER_REQUEST>

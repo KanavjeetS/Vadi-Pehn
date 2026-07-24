@@ -1,3 +1,7 @@
+# EXPERIMENTAL / REFERENCE ONLY
+# Enterprise Kubernetes NetworkPolicy stubs for future cloud hosting.
+# For current production stack, use root docker-compose.yml via .\vadi.ps1 docker-up
+#
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

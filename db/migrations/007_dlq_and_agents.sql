@@ -21,6 +21,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_write_dlq_status ON memory_write_dlq(statu
 
 -- RLS for memory_write_dlq
 ALTER TABLE memory_write_dlq ENABLE ROW LEVEL SECURITY;
+ALTER TABLE memory_write_dlq FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS memory_write_dlq_tenant_policy ON memory_write_dlq;
 CREATE POLICY memory_write_dlq_tenant_policy ON memory_write_dlq
@@ -40,6 +41,8 @@ CREATE TABLE IF NOT EXISTS professional_career_pathways (
 );
 
 ALTER TABLE professional_career_pathways ENABLE ROW LEVEL SECURITY;
+ALTER TABLE professional_career_pathways FORCE ROW LEVEL SECURITY;
+
 DROP POLICY IF EXISTS professional_career_tenant_policy ON professional_career_pathways;
 CREATE POLICY professional_career_tenant_policy ON professional_career_pathways
     FOR ALL
@@ -61,6 +64,8 @@ CREATE TABLE IF NOT EXISTS curated_learning_resources (
 );
 
 ALTER TABLE curated_learning_resources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE curated_learning_resources FORCE ROW LEVEL SECURITY;
+
 DROP POLICY IF EXISTS curated_learning_tenant_policy ON curated_learning_resources;
 CREATE POLICY curated_learning_tenant_policy ON curated_learning_resources
     FOR ALL

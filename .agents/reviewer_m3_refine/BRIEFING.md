@@ -1,54 +1,61 @@
-# BRIEFING — 2026-07-23T20:10:35Z
+# BRIEFING — 2026-07-24T10:25:30Z
 
 ## Mission
-Review Milestone 3 (AI Platform & Safety) of Vadi-Pehn Full MVP Refinement and issue an evidence-based verdict (APPROVE / REQUEST_CHANGES).
+Review & verify Milestone 3 changes (Connect Child Companion UI to Real Voice Pipeline) in Vadi-Pehn project.
 
 ## 🔒 My Identity
-- Archetype: reviewer_and_adversarial_critic
+- Archetype: reviewer_m3_refine
 - Roles: reviewer, critic
 - Working directory: d:\Vadi Bhen\.agents\reviewer_m3_refine
-- Original parent: 6806281f-390a-455c-bb33-ad77644439be
-- Milestone: Milestone 3 (AI Platform & Safety)
+- Original parent: bbf841a6-925d-4b95-9cc3-f135728b712b
+- Milestone: Milestone 3 (Connect Child Companion UI to Real Voice Pipeline)
 - Instance: 1 of 1
 
 ## 🔒 Key Constraints
 - Review-only — do NOT modify implementation code
-- Check for integrity violations (hardcoded test outputs, facade implementations, rule bypasses)
-- Enforce Child Safety Non-Negotiables & Architecture Non-Negotiables
-- Run tests and inspect code thoroughly
+- Fail-closed child safety verification
+- Integrity violation check (hardcoded results, dummy implementations, shortcuts, self-certifying work)
 
 ## Current Parent
-- Conversation ID: 6806281f-390a-455c-bb33-ad77644439be
-- Updated: 2026-07-23T20:10:35Z
+- Conversation ID: bbf841a6-925d-4b95-9cc3-f135728b712b
+- Updated: 2026-07-24T10:25:30Z
 
 ## Review Scope
-- **Files to review**: `services/safety-proxy/`, `services/orchestration/`
-- **Interface contracts**: PROJECT.md / AGENTS.md / system design
-- **Review criteria**: Hinglish self-harm keywords, safety-proxy dev bypass structure, prompt injection deflection & self-harm escalation, memory writes/reads, persona rendering, career panel rendering, test execution.
+- **Files to review**:
+  - `webapp/child/child.js`
+  - `webapp/child/index.html`
+  - `services/voice-gateway/src/voice_gateway/main.py`, `pipeline.py`, `providers.py`
+  - `services/api-gateway/src/api_gateway/main.py`
+  - `services/config.py`
+  - Worker handoff: `d:\Vadi Bhen\.agents\worker_m3_refine\handoff.md`
+- **Review criteria**:
+  - `/api/v1/voice/turn` integration using `VoiceTurnPayload`
+  - Avatar state transitions (`idle` -> `listening` -> `thinking` -> `speaking` -> `idle`), SVG mouth animation, aura ring
+  - Barge-in handling (`interruptPlayback()`) and canvas waveform visualizer
+  - Fail-closed safety handling when `safety_verdict !== 'safe'`
+  - AI identity disclosure banner
+  - Voice gateway & API gateway configuration/routes
+  - Test suite pass rate: `py -3 -m pytest services/voice-gateway services/api-gateway`
 
 ## Review Checklist
-- **Items reviewed**:
-  - `services/safety-proxy/src/safety_proxy/actions.py` (Hinglish keywords & fail-closed logic) — VERIFIED PASS
-  - `services/safety-proxy/src/safety_proxy/main.py` (Dev bypass structure) — VERIFIED PASS
-  - `services/safety-proxy/rails/child_safety.co` (Prompt injection & self-harm rails) — VERIFIED PASS
-  - `services/orchestration/src/orchestration/graph.py` (LangGraph state machine, memory write, career panel) — VERIFIED PASS
-  - `services/orchestration/src/orchestration/retrieval.py` (Recency LIMIT 5 fallback) — VERIFIED PASS
-  - `services/orchestration/personas/*.jinja2` (Sibling & career persona templates) — VERIFIED PASS
-  - Pytest test execution (`services/safety-proxy/`, `services/orchestration/`) — 37 PASSED (0 FAIL)
+- **Items reviewed**: `webapp/child/child.js`, `webapp/child/index.html`, `services/api-gateway/src/api_gateway/main.py`, `services/voice-gateway/src/voice_gateway/main.py`, `pipeline.py`, `providers.py`, `services/config.py`, `pytest` output (90 passed).
 - **Verdict**: APPROVE
-- **Unverified claims**: None
+- **Unverified claims**: None. All claims verified independently via file inspection and test execution.
 
 ## Attack Surface
-- **Hypotheses tested**: Checked whether dev bypass leaks into core classifier or production path (it does not), checked whether recency fallback executes on missing embedding client (it does), checked all 37 test cases.
-- **Vulnerabilities found**: None
-- **Untested angles**: None within scope
+- **Hypotheses tested**:
+  - Autoplay rejection fallback handled? YES.
+  - Fail-closed safety verdict stops audio playback? YES.
+  - SpeechRecognition fallback for unsupported browsers? YES.
+  - Barge-in interrupts current audio and visualizer? YES.
+- **Vulnerabilities found**: None.
+- **Untested angles**: Live WebRTC network streaming requires active LiveKit server in deployed environment.
 
 ## Key Decisions Made
-- Issued verdict: APPROVE
-- Wrote `d:\Vadi Bhen\.agents\reviewer_m3_refine\handoff.md`
+- Confirmed 100% test pass rate across 90 pytest tests.
+- Issued APPROVE verdict for Milestone 3.
 
 ## Artifact Index
-- `d:\Vadi Bhen\.agents\reviewer_m3_refine\ORIGINAL_REQUEST.md` — Original request
-- `d:\Vadi Bhen\.agents\reviewer_m3_refine\BRIEFING.md` — Active briefing index
-- `d:\Vadi Bhen\.agents\reviewer_m3_refine\progress.md` — Active progress log
-- `d:\Vadi Bhen\.agents\reviewer_m3_refine\handoff.md` — Complete handoff review report
+- `d:\Vadi Bhen\.agents\reviewer_m3_refine\ORIGINAL_REQUEST.md` — Original request log
+- `d:\Vadi Bhen\.agents\reviewer_m3_refine\BRIEFING.md` — Agent briefing & memory
+- `d:\Vadi Bhen\.agents\reviewer_m3_refine\handoff.md` — Reviewer handoff report

@@ -1,80 +1,65 @@
-# BRIEFING — 2026-07-23T19:44:30Z
+# BRIEFING — 2026-07-24T04:48:00Z
 
 ## Mission
-Backend & Infrastructure Engineering (@backend-engineer & @devops) for Milestone 2 of Vadi-Pehn Full MVP Refinement. Harden endpoints in api-gateway, governance-service, dashboard-bff, implement real DB queries for overview metrics, add X-Request-ID middleware/tracing header, verify rate limiting, create docker-compose.yml, .env.example, Makefile, and logging_config.py.
+Canonicalize & Verify Deployment Story (Infra & DevOps) for Milestone 2.
 
 ## 🔒 My Identity
-- Archetype: implementer / qa / specialist
-- Roles: backend-engineer, devops
-- Working directory: d:\Vadi Bhen\.agents\worker_m2_refine
-- Original parent: 6806281f-390a-455c-bb33-ad77644439be
-- Milestone: Milestone 2 (Divisions 2 & 7)
+- Archetype: devops_infra_worker
+- Roles: implementer, qa, specialist
+- Working directory: d:\Vadi Bhen\.agents\worker_m2_refine\
+- Original parent: bbf841a6-925d-4b95-9cc3-f135728b712b
+- Milestone: Milestone 2
 
 ## 🔒 Key Constraints
-- Child Safety Non-Negotiables apply (fail-closed, no safety proxy bypass, synthetic fixtures only).
-- RLS queries must issue SET LOCAL app.current_tenant_id inside transaction.
-- Governance DB is physically separate from Memory Service DB.
-- Centralized config in config.py / Settings.
-- Format / clean Python code, pass all unit tests.
+- Canonical local single-process dev launcher: `start_desktop.py` (`.\vadi.ps1 dev`).
+- Canonical multi-container production stack definition: root `docker-compose.yml` (`.\vadi.ps1 docker-up` or `docker compose up`), containing 9 microservices + webapp Nginx frontend + Postgres DBs.
+- Clean up deployment ambiguity in `infra/` with clear README/deprecation headers, linking, or archiving stubs.
+- Verify `vadi.ps1` commands (`dev`, `docker-up`, `test`, `check`).
+- Programmatically verify stack and launchers via pytest test suite (`tests/test_deployment_canonicalization.py`).
+- Strictly adhere to Integrity Mandate: real implementations, no hardcoding.
 
 ## Current Parent
-- Conversation ID: 6806281f-390a-455c-bb33-ad77644439be
-- Updated: 2026-07-23T19:44:30Z
+- Conversation ID: bbf841a6-925d-4b95-9cc3-f135728b712b
+- Updated: 2026-07-24T04:48:00Z
 
 ## Task Summary
-- **What to build**:
-  1. Harden endpoints in `services/api-gateway/`, `services/governance-service/`, and `services/dashboard-bff/`.
-  2. Ensure `GET /api/v1/guardian/overview` queries real Supabase/Postgres tables for session counts, learner streaks, and safety incident counts (no stub zeros).
-  3. Ensure `GET /api/v1/admin/overview` and `/api/v1/admin/observability/metrics` query real DB metrics (no stub zeros).
-  4. Add `X-Request-ID` middleware/header to all API gateway and dashboard BFF responses for OpenTelemetry tracing.
-  5. Verify rate-limiting middleware (`check_rate_limit`).
-  6. Create `docker-compose.yml` at repo root mapping all 9 microservices with proper ports, `depends_on`, healthchecks, and `.env` references.
-  7. Create `.env.example` at repo root matching `.env` structure with documented placeholders.
-  8. Create `Makefile` at repo root with targets: `make dev`, `make docker-up`, `make docker-down`, `make test`, `make lint`.
-  9. Create `services/logging_config.py` with `configure_logging()` setting up Python structured JSON logging. Call `configure_logging()` in `start_desktop.py` and all service `main.py` entry points.
-- **Success criteria**: All service tests pass (`pytest`), endpoints query real DB metrics, logging configured, docker-compose/Makefile/.env.example set up.
-- **Interface contracts**: SystemDesign.md, PRD.md, AGENTS.md
+- **What to build**: Deployment canonicalization and verification for local desktop launcher (`start_desktop.py`), root `docker-compose.yml`, `infra/` directory cleanup, `vadi.ps1` script alignment, and pytest validation suite.
+- **Success criteria**: All 9 microservices + nginx + postgres defined in `docker-compose.yml`; `start_desktop.py` cleanly mounts sub-services; `vadi.ps1` correctly references canonical launchers; `pytest tests/test_deployment_canonicalization.py` passes cleanly.
 
 ## Key Decisions Made
-- Implemented `services/logging_config.py` with structured JSON logging (`JSONFormatter`) and called `configure_logging()` in `start_desktop.py` and all 9 service entry points.
-- Added `X-Request-ID` HTTP middleware to API gateway, dashboard BFF, and governance service.
-- Implemented real database and dynamic repository metric queries in `services/dashboard-bff/src/dashboard_bff/repository.py` for session counts, streak days, weekly engagement hours, top skills, open discrepancies, total sessions, active traces, and safety pass rates.
-- Updated `GuardianOverview`, `AdminOverview`, and `get_admin_system_metrics` to populate real DB metrics without hardcoded zeros or static stubs.
-- Created root `docker-compose.yml` mapping all 9 microservices with healthchecks and dependencies.
-- Created root `.env.example` matching `.env` structure.
-- Created root `Makefile` with `dev`, `docker-up`, `docker-down`, `test`, `lint` targets.
-
-## Loaded Skills
-- **Source**: `d:\Vadi Bhen\.agents\skills\vadi-pehn-development\SKILL.md`
-- **Local copy**: N/A
-- **Core methodology**: Vadi-Pehn architecture, persona duties, fail-closed safety, RLS isolation, LangGraph orchestration, CrewAI, logging, and observability.
+1. **Desktop Launcher (`start_desktop.py`)**: Imported and mounted `memory_service.main.app` and `memory_lifespan` into `desktop_lifespan` and `sub_apps`, ensuring all 9 microservices are mounted cleanly in local single-process development mode.
+2. **Root Stack (`docker-compose.yml`)**: Added physically isolated `postgres-memory` (pgvector:pg16) and `postgres-governance` (postgres:16-alpine) services and volume declarations. Linked `memory-service` and `governance-service` to their respective database containers. Verified all 9 microservices + webapp + 2 DB instances via `docker compose config --quiet`.
+3. **`infra/` Directory Cleanup**: Created `infra/README.md` explicitly defining canonical launchers (`start_desktop.py` & root `docker-compose.yml`) and added clear `DEPRECATED` headers to `infra/docker-compose.yml`, `infra/docker-compose.dev.yml`, and `infra/docker-compose.mvp.yml`, plus `EXPERIMENTAL` headers to `infra/k8s/` stubs.
+4. **Task Runner (`vadi.ps1`)**: Added `"check"` target to execute `pytest tests/test_deployment_canonicalization.py -v`. Updated `vadi.ps1 help` documentation to clarify canonical dev and docker launchers.
+5. **Validation Suite (`tests/test_deployment_canonicalization.py`)**: Created 5 programmatic tests verifying Compose structure, Compose CLI syntax, `start_desktop.py` imports/mounts, `vadi.ps1` commands, and `infra/` documentation.
 
 ## Change Tracker
 - **Files modified**:
-  - `services/logging_config.py` (created)
-  - `docker-compose.yml` (created)
-  - `.env.example` (updated)
-  - `Makefile` (created)
-  - `services/dashboard-bff/src/dashboard_bff/repository.py` (updated)
-  - `services/dashboard-bff/src/dashboard_bff/models.py` (updated)
-  - `services/dashboard-bff/src/dashboard_bff/main.py` (updated)
-  - `services/dashboard-bff/src/dashboard_bff/admin_observability.py` (updated)
-  - `services/dashboard-bff/tests/test_dashboard.py` (updated)
-  - `services/api-gateway/src/api_gateway/main.py` (updated)
-  - `services/api-gateway/tests/test_api_gateway.py` (updated)
-  - `services/governance-service/src/governance_service/main.py` (updated)
-  - `services/ingestion-service/src/ingestion_service/main.py` (updated)
-  - `services/orchestration/src/orchestration/main.py` (updated)
-  - `services/panel-service/src/panel_service/main.py` (updated)
-  - `services/safety-proxy/src/safety_proxy/main.py` (updated)
-  - `services/voice-gateway/src/voice_gateway/main.py` (updated)
-  - `services/memory-service/src/memory_service/main.py` (created)
-  - `services/memory-service/Dockerfile` (created)
-  - `start_desktop.py` (updated)
-- **Build status**: All code updated and unit tests running
+  - `start_desktop.py`: Added `memory_service` import, lifespan context manager, and `sub_apps` mounting.
+  - `docker-compose.yml`: Added `postgres-memory` and `postgres-governance` services and volumes; updated `x-internal-urls` and dependencies.
+  - `vadi.ps1`: Added `check` target and updated help documentation.
+  - `infra/README.md`: Created master infrastructure & deployment documentation guide.
+  - `infra/docker-compose.yml`: Added DEPRECATED header pointing to root `docker-compose.yml`.
+  - `infra/docker-compose.dev.yml`: Added DEPRECATED header pointing to `start_desktop.py` & root `docker-compose.yml`.
+  - `infra/docker-compose.mvp.yml`: Added DEPRECATED header pointing to root `docker-compose.yml`.
+  - `infra/k8s/deployment.yaml`: Added EXPERIMENTAL / REFERENCE ONLY header.
+  - `infra/k8s/network-policy.yaml`: Added EXPERIMENTAL / REFERENCE ONLY header.
+  - `tests/test_deployment_canonicalization.py`: Created automated deployment validation pytest suite.
+- **Build status**: PASS (5/5 canonical deployment tests pass, 218/218 full test suite pass)
 - **Pending issues**: None
 
 ## Quality Status
-- **Build/test result**: pytest running on all 184 tests
+- **Build/test result**: PASS (5/5 canonical deployment tests pass, 218/218 full test suite pass in 77.06s)
 - **Lint status**: Clean
-- **Tests added/modified**: `test_x_request_id_middleware`, `test_rate_limiting`, `test_dashboard_x_request_id_middleware`
+- **Tests added/modified**: `tests/test_deployment_canonicalization.py` (5 test cases)
+
+## Loaded Skills
+- **Source**: `d:\Vadi Bhen\.agents\skills\vadi-pehn-development\SKILL.md`
+- **Local copy**: `d:\Vadi Bhen\.agents\skills\vadi-pehn-development\SKILL.md`
+- **Core methodology**: Single source of truth for Vadi-Pehn architecture, 9 services, safety fail-closed, and testing standards.
+
+## Artifact Index
+- `d:\Vadi Bhen\.agents\worker_m2_refine\ORIGINAL_REQUEST.md` — Original request text
+- `d:\Vadi Bhen\.agents\worker_m2_refine\BRIEFING.md` — Agent briefing & working memory
+- `d:\Vadi Bhen\.agents\worker_m2_refine\progress.md` — Progress log
+- `d:\Vadi Bhen\.agents\worker_m2_refine\handoff.md` — Handoff report

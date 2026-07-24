@@ -74,6 +74,11 @@ switch ($Target) {
   }
 
   # ── Test suite ─────────────────────────────────────────────────────────────
+  "check" {
+    Write-Green "Running deployment canonicalization & stack validation checks..."
+    py -m pytest "$Root\tests\test_deployment_canonicalization.py" -v
+  }
+
   "test" {
     Write-Green "Running full test suite..."
     py -m pytest "$Root\services" "$Root\tests" -x -q --tb=short
@@ -130,19 +135,20 @@ switch ($Target) {
 Vadi-Pehn — PowerShell Task Runner
 Usage: .\vadi.ps1 <target>
 
-DEVELOPMENT
-  dev              Start single-process dev server (http://localhost:8080)
+DEVELOPMENT (Canonical single-process launcher)
+  dev              Start single-process dev server (http://localhost:8080 via start_desktop.py)
 
-DOCKER
+DOCKER (Canonical production stack)
   docker-build     Build all 9 Docker images (parallel)
-  docker-up        Start full stack in Docker (http://localhost)
+  docker-up        Start full stack in Docker (http://localhost via root docker-compose.yml)
   docker-down      Stop all containers
   docker-logs      Tail all container logs
   docker-ps        Show container status
   docker-clean     Remove containers, volumes, and images
   restart <svc>    Restart one service (e.g. .\vadi.ps1 restart api-gateway)
 
-TESTING
+TESTING & VALIDATION
+  check            Deployment canonicalization & stack validation checks
   test             Full pytest suite
   test-safety      Safety keyword regression tests
   test-e2e         End-to-end conversation turn

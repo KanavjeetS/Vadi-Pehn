@@ -22,6 +22,8 @@ MEMORY_MIGRATIONS = [
     "003_rapport_and_panel.sql",
     "005_ingestion_schema.sql",
     "006_identity_rls.sql",
+    "007_dlq_and_agents.sql",
+    "008_parent_id_hierarchical_chunking.sql",
 ]
 
 GOVERNANCE_MIGRATIONS = [

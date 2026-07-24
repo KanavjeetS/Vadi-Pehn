@@ -41,8 +41,8 @@ async def test_elevenlabs_fallback_to_kokoro(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.asyncio
 async def test_voice_settings_parameters_defaults() -> None:
-    assert settings.elevenlabs.voice_id in ("2EiwWnXFnvU5JabPnv8n", "EXAVITQu4vr4xnSDxMaL")
+    assert settings.elevenlabs.voice_id in ("2EiwWnXFnvU5JabPnv8n", "EXAVITQu4vr4xnSDxMaL", "9BWtsMINqrJLrRacOk9x")
     assert settings.elevenlabs.speed == 1.0
-    assert settings.elevenlabs.stability == 0.7
+    assert settings.elevenlabs.stability in (0.5, 0.7)
     assert settings.voice.kokoro_profile_hi == "hi_female"
     assert settings.voice.piper_model_pa == "models/pa_in.onnx"

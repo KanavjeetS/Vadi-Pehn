@@ -5,6 +5,9 @@ let tenantId = localStorage.getItem('vadi_tenant_id') || sessionStorage.getItem(
 let guardianId = localStorage.getItem('vadi_guardian_id') || sessionStorage.getItem('vadi_guardian_id') || localStorage.getItem('guardian_id') || '00000000-0000-0000-0000-000000000002';
 let learnerId = localStorage.getItem('vadi_learner_id') || sessionStorage.getItem('vadi_learner_id') || localStorage.getItem('learner_id') || '00000000-0000-0000-0000-000000000003';
 
+let engagementChart = null;
+let moodChart = null;
+
 // ── Tab Navigation ─────────────────────────────────────────────────────────
 function switchTab(tabId) {
     document.querySelectorAll('.view-pane').forEach(el => el.classList.remove('active'));
@@ -38,6 +41,106 @@ function showStatusToast(message, isError = false) {
     }, 3500);
 }
 
+// ── Dynamic Chart Rendering & Update Engine ────────────────────────────────
+function renderOrUpdateCharts(sessionTrends, topicDistribution) {
+    if (typeof Chart === 'undefined') return;
+
+    // 1. Session Activity Line Chart
+    const engCanvas = document.getElementById('engagementChart');
+    if (engCanvas) {
+        const engCtx = engCanvas.getContext('2d');
+        const labels = (sessionTrends && sessionTrends.length > 0)
+            ? sessionTrends.map(t => t.day)
+            : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const values = (sessionTrends && sessionTrends.length > 0)
+            ? sessionTrends.map(t => t.minutes)
+            : [0, 0, 0, 0, 0, 0, 0];
+
+        if (engagementChart) {
+            engagementChart.data.labels = labels;
+            engagementChart.data.datasets[0].data = values;
+            engagementChart.update();
+        } else {
+            const engGrad = engCtx.createLinearGradient(0, 0, 0, 200);
+            engGrad.addColorStop(0, 'rgba(124, 58, 237, 0.35)');
+            engGrad.addColorStop(1, 'rgba(124, 58, 237, 0.0)');
+
+            engagementChart = new Chart(engCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        borderColor: '#7c3aed',
+                        borderWidth: 3,
+                        fill: true,
+                        backgroundColor: engGrad,
+                        tension: 0.45,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#7c3aed'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8' }, min: 0 }
+                    }
+                }
+            });
+        }
+    }
+
+    // 2. Topic & Mood Distribution Doughnut Chart
+    const moodCanvas = document.getElementById('moodChart');
+    if (moodCanvas) {
+        const moodCtx = moodCanvas.getContext('2d');
+        const colors = ['#7c3aed', '#00bbf9', '#10b981', '#ec4899', '#f59e0b'];
+        let labels = [];
+        let values = [];
+
+        if (topicDistribution && topicDistribution.length > 0) {
+            labels = topicDistribution.map(t => `${t.topic} (${t.percentage}%)`);
+            values = topicDistribution.map(t => t.percentage);
+        } else {
+            labels = ['No topics recorded (0%)'];
+            values = [100];
+        }
+
+        const bgColors = (topicDistribution && topicDistribution.length > 0)
+            ? colors.slice(0, values.length)
+            : ['#e2e8f0'];
+
+        if (moodChart) {
+            moodChart.data.labels = labels;
+            moodChart.data.datasets[0].data = values;
+            moodChart.data.datasets[0].backgroundColor = bgColors;
+            moodChart.update();
+        } else {
+            moodChart = new Chart(moodCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: bgColors,
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { color: '#475569', font: { size: 11 } } } },
+                    cutout: '70%'
+                }
+            });
+        }
+    }
+}
+
 // ── Overview Data Fetcher ──────────────────────────────────────────────────
 async function fetchGuardianOverview() {
     const token = localStorage.getItem('vadi_access_token') || sessionStorage.getItem('vadi_access_token') || localStorage.getItem('access_token') || '';
@@ -54,8 +157,8 @@ async function fetchGuardianOverview() {
             // Bind Overview Stat Cards dynamically
             const statVals = document.querySelectorAll('.stat-card .stat-val');
             if (statVals.length >= 4) {
-                statVals[0].innerText = data.weekly_engagement_hours || '2h 52m';
-                statVals[1].innerText = data.current_streak || '5 days';
+                statVals[0].innerText = data.weekly_engagement_hours || '0h 0m';
+                statVals[1].innerText = data.current_streak || '0 days';
                 statVals[2].innerText = data.most_common_mood || 'Curious';
                 statVals[3].innerText = data.top_growing_skill || 'World exposure';
             }
@@ -91,11 +194,15 @@ async function fetchGuardianOverview() {
 
             // Render Safety Incidents List if present
             renderSafetyIncidents(data.safety_incidents || []);
+
+            // Render or update Chart.js dynamic figures with real API data
+            renderOrUpdateCharts(data.session_trends || [], data.topic_distribution || []);
         }
     } catch (e) {
         console.warn('Overview fetch note:', e);
     }
 }
+
 
 // ── Safety Incident Queue Renderer with SLA Badges ────────────────────────
 function renderSafetyIncidents(incidents) {

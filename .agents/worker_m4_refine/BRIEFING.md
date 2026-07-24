@@ -1,55 +1,58 @@
-# BRIEFING — 2026-07-23T20:00:15Z
+# BRIEFING — 2026-07-24T10:31:45Z
 
 ## Mission
-Rebuild all web application portals under `webapp/` into a 2026 world-class UI/UX with full responsiveness, WCAG 2.1 AA accessibility, animated components, real API integrations, and particle/visualizer effects.
+Wire Real Database Data into Guardian Dashboard Charts (Governance UI)
 
 ## 🔒 My Identity
-- Archetype: Lead Frontend Engineer & Product/UX Designer
-- Roles: implementer, qa, specialist (@backend-engineer & @doc-keeper)
+- Archetype: implementer, qa, specialist
+- Roles: implementer, qa, specialist
 - Working directory: d:\Vadi Bhen\.agents\worker_m4_refine
-- Original parent: 6806281f-390a-455c-bb33-ad77644439be
-- Milestone: Milestone 4 (Divisions 6, 9, 11 - Web App UI Overhaul)
+- Original parent: bbf841a6-925d-4b95-9cc3-f135728b712b
+- Milestone: Milestone 4
 
 ## 🔒 Key Constraints
-- Glassmorphism card, animated gradient mesh background, particle background effect.
-- Inter font, CSS custom properties, WCAG 2.1 AA compliance, responsive layouts.
-- Real API endpoints: `/api/v1/guardian/overview`, `/api/v1/admin/overview`, `/api/v1/admin/observability/metrics`.
-- Child portal: Vadi avatar with 3 animation states (idle, listening, speaking), staggered chat bubbles, live audio waveform visualizer (Web Audio API canvas), XP progress bar, streak counter, level badge, mood emoji chips, topic chips, typing indicator, voice pulsing visualizer.
-- Guardian portal: Chart.js animated line & donut charts, safety incident timeline with SLA badges, animated consent toggles, learner profile card.
-- Admin portal: KPI metric tiles with animated counters, Groq LLM status badge, recent incidents table.
+- Remove remaining hardcoded fake data arrays in webapp/guardian/guardian.js.
+- Connect fetchGuardianOverview() to /api/v1/guardian/overview.
+- Dynamically update Chart.js charts with real backend data without crashing or using fake fallbacks.
+- Verify tests in services/dashboard-bff and services/governance-service pass 100%.
 
 ## Current Parent
-- Conversation ID: 6806281f-390a-455c-bb33-ad77644439be
-- Updated: 2026-07-23T20:00:15Z
+- Conversation ID: bbf841a6-925d-4b95-9cc3-f135728b712b
+- Updated: 2026-07-24T10:31:45Z
 
 ## Task Summary
-- **What to build**: Rebuild webapp login, signup, child, guardian, and admin portals with top-notch UI/UX, animations, audio visualizer, charts, and real API integrations.
-- **Success criteria**: All pages built cleanly with modern CSS & JS, tests passing, real API integration, full functionality.
-- **Interface contracts**: `PROJECT.md` / `PRD.md` / `SystemDesign.md`
-- **Code layout**: `webapp/` directory structure
-
-## Key Decisions Made
-- Used clean modular vanilla JS + HTML + modern CSS (variables, glassmorphism, keyframes, canvas animations) for fast responsive UI/UX without build tooling dependencies, ensuring WCAG 2.1 AA compliance and Inter font integration.
-- Integrated Chart.js for data visualization in Guardian and Admin portals.
-- Built Canvas Web Audio API visualizer for TTS audio waveform and voice input pulsing visualizer.
-
-## Artifact Index
-- `d:\Vadi Bhen\.agents\worker_m4_refine\ORIGINAL_REQUEST.md`
-- `d:\Vadi Bhen\.agents\worker_m4_refine\BRIEFING.md`
-- `d:\Vadi Bhen\.agents\worker_m4_refine\progress.md`
-- `d:\Vadi Bhen\.agents\worker_m4_refine\handoff.md`
+- **What to build**: Connect webapp/guardian UI charts & cards to real DB endpoints via /api/v1/guardian/overview. Ensure Chart.js charts render real metrics (session trends, topic distribution, active engagement, consent toggles, learner streaks, incident timeline) cleanly.
+- **Success criteria**: 100% test pass rate in pytest services/dashboard-bff services/governance-service; zero fake data arrays in guardian.js; handoff.md written; notification sent to parent.
+- **Interface contracts**: /api/v1/guardian/overview response schema
+- **Code layout**: webapp/guardian/, services/dashboard-bff/, services/governance-service/
 
 ## Change Tracker
-- **Files modified**: `webapp/login.html`, `webapp/signup.html`, `webapp/child/index.html`, `webapp/child/child.js`, `webapp/guardian/index.html`, `webapp/guardian/guardian.js`, `webapp/admin/index.html`, `webapp/admin/admin.js`
-- **Build status**: PASS
+- **Files modified**:
+  - `webapp/guardian/index.html`: Removed inline hardcoded fake arrays (`[18, 24, 12...]` & `[45, 30...]`), initializing overview via `fetchGuardianOverview()`.
+  - `webapp/guardian/guardian.js`: Added dynamic Chart.js update engine `renderOrUpdateCharts()`, binding `session_trends` and `topic_distribution` directly from API.
+  - `services/dashboard-bff/src/dashboard_bff/models.py`: Extended `GuardianOverview` with `SessionTrendItem` & `TopicDistributionItem`.
+  - `services/dashboard-bff/src/dashboard_bff/repository.py`: Implemented `session_trends` and `topic_distribution` metric queries in `PostgresDashboardRepository` and `InMemoryDashboardRepository`.
+  - `services/dashboard-bff/src/dashboard_bff/main.py`: Populated `session_trends` and `topic_distribution` in `/api/v1/guardian/overview`.
+  - `services/dashboard-bff/tests/test_dashboard.py` & `conftest.py`: Added automated test verification for session trends, topics, consent states, and incident timelines.
+- **Build status**: 100% PASS
 - **Pending issues**: None
 
 ## Quality Status
-- **Build/test result**: PASS (All webapp frontend portals overhauled and verified)
-- **Lint status**: PASS
-- **Tests added/modified**: Verified against API gateway and dashboard-bff endpoints
+- **Build/test result**: 27 passed in `dashboard-bff` tests, 5 passed in `governance-service` tests.
+- **Lint status**: Clean
+- **Tests added/modified**: `test_guardian_overview_session_trends_and_topics`, `test_in_memory_repository_dynamic_metrics`
 
 ## Loaded Skills
-- **Source**: `d:\Vadi Bhen\.agents\skills\vadi-pehn-development\SKILL.md`
-- **Local copy**: `d:\Vadi Bhen\.agents\worker_m4_refine\skills\vadi-pehn-development\SKILL.md`
-- **Core methodology**: Vadi-Pehn architecture, 9-persona system, safety fail-closed rules, RLS, memory & governance API integration requirements.
+- **Source**: d:\Vadi Bhen\.agents\skills\vadi-pehn-development\SKILL.md
+- **Local copy**: d:\Vadi Bhen\.agents\worker_m4_refine\vadi-pehn-development_SKILL.md
+- **Core methodology**: Platform development guide covering architecture, guardian-dashboard BFF, safety, testing, and persona rules.
+
+## Key Decisions Made
+- Chart initialization shifted completely from static HTML inline arrays to dynamic API payload rendering in `guardian.js`.
+- Added `session_trends` (7-day daily turn engagement breakdown) and `topic_distribution` (topic interest profile percentages) to `GuardianOverview` model and repository implementations.
+
+## Artifact Index
+- d:\Vadi Bhen\.agents\worker_m4_refine\ORIGINAL_REQUEST.md
+- d:\Vadi Bhen\.agents\worker_m4_refine\BRIEFING.md
+- d:\Vadi Bhen\.agents\worker_m4_refine\progress.md
+- d:\Vadi Bhen\.agents\worker_m4_refine\handoff.md

@@ -19,11 +19,15 @@ CRITICAL INVARIANTS (see GUARDRAILS.md):
 from __future__ import annotations
 
 import hashlib
+import json
+import logging
 import uuid
 import os
 import sys
 from typing import Any, AsyncIterator, Literal
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel
@@ -642,8 +646,15 @@ class OrchestrationGraph:
                     category=verdict_code,
                     transcript_excerpt=state.message_text,
                 )
-            print(
-                f"[INCIDENT] {incident_id} | severity={verdict_code} | learner={_hash_id(state.learner_id)}"
+            logger.warning(
+                json.dumps(
+                    {
+                        "event": "governance_incident",
+                        "incident_id": str(incident_id),
+                        "severity": verdict_code,
+                        "learner_id": _hash_id(state.learner_id),
+                    }
+                )
             )
             return state.model_copy(update={"incident_id": incident_id})
         return state

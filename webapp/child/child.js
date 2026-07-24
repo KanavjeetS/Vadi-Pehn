@@ -4,6 +4,7 @@ let isListening = false;
 let recognition = null;
 let currentAudio = null;
 let currentMood = 'Curious';
+let mouthAnimationInterval = null;
 let authToken = localStorage.getItem('vadi_access_token') || sessionStorage.getItem('vadi_access_token') || localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || '';
 let tenantId = localStorage.getItem('vadi_tenant_id') || sessionStorage.getItem('vadi_tenant_id') || localStorage.getItem('tenant_id') || sessionStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
 let learnerId = localStorage.getItem('vadi_learner_id') || sessionStorage.getItem('vadi_learner_id') || localStorage.getItem('learner_id') || sessionStorage.getItem('learner_id') || '00000000-0000-0000-0000-000000000003';
@@ -118,6 +119,19 @@ function stopMicStream() {
     }
 }
 
+// ── Barge-In Handling (PRD §6.3) ───────────────────────────────────────────
+function interruptPlayback() {
+    if (currentAudio) {
+        try {
+            currentAudio.pause();
+            currentAudio.currentTime = 0;
+        } catch (e) {}
+        currentAudio = null;
+    }
+    stopMouthAnimation();
+    stopVisualizer();
+}
+
 // ── Theme Switcher ────────────────────────────────────────────────────────
 function toggleTheme() {
     document.body.classList.toggle('light-theme');
@@ -146,24 +160,58 @@ function addChatBubble(sender, text) {
     container.scrollTop = container.scrollHeight;
 }
 
-// ── Avatar States & Eye Blinking ─────────────────────────────────────────
-function setMouthState(state) {
+// ── Avatar States (`idle` -> `listening` -> `thinking` -> `speaking`) ─────
+function setAvatarState(state) {
     const mouth = document.getElementById('vadi-mouth');
     const aura = document.getElementById('aura-ring');
+    const captionSub = document.getElementById('caption-sub');
     if (!mouth) return;
+
+    stopMouthAnimation();
 
     if (state === 'speaking') {
         mouth.setAttribute('d', 'M82 122 Q100 144 118 122 Q100 132 82 122Z');
         mouth.setAttribute('fill', '#ffffff');
-        if (aura) aura.style.background = 'radial-gradient(circle, rgba(236, 72, 153, 0.6) 0%, rgba(124, 58, 237, 0.0) 70%)';
+        if (aura) aura.style.background = 'radial-gradient(circle, rgba(236, 72, 153, 0.7) 0%, rgba(124, 58, 237, 0.2) 70%)';
+        startMouthAnimation();
     } else if (state === 'listening') {
         mouth.setAttribute('d', 'M86 124 Q100 130 114 124');
         mouth.setAttribute('fill', 'none');
         if (aura) aura.style.background = 'radial-gradient(circle, rgba(0, 187, 249, 0.6) 0%, rgba(124, 58, 237, 0.0) 70%)';
-    } else {
+        if (captionSub) captionSub.innerText = "Listening... Speak now!";
+    } else if (state === 'thinking') {
+        mouth.setAttribute('d', 'M92 124 Q100 120 108 124 Q100 130 92 124Z');
+        mouth.setAttribute('fill', '#a78bfa');
+        if (aura) aura.style.background = 'radial-gradient(circle, rgba(167, 139, 250, 0.7) 0%, rgba(236, 72, 153, 0.2) 70%)';
+        if (captionSub) {
+            captionSub.innerHTML = `Vadi is thinking <span class="typing-indicator"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></span>`;
+        }
+    } else { // idle
         mouth.setAttribute('d', 'M82 122 Q100 138 118 122');
         mouth.setAttribute('fill', 'none');
         if (aura) aura.style.background = 'radial-gradient(circle, rgba(124, 58, 237, 0.4) 0%, rgba(236, 72, 153, 0.0) 70%)';
+        if (captionSub) captionSub.innerText = "Tap me or the mic button below to talk!";
+    }
+}
+
+function startMouthAnimation() {
+    const mouth = document.getElementById('vadi-mouth');
+    if (!mouth) return;
+    let open = true;
+    mouthAnimationInterval = setInterval(() => {
+        if (open) {
+            mouth.setAttribute('d', 'M82 122 Q100 132 118 122');
+        } else {
+            mouth.setAttribute('d', 'M82 122 Q100 144 118 122 Q100 132 82 122Z');
+        }
+        open = !open;
+    }, 200);
+}
+
+function stopMouthAnimation() {
+    if (mouthAnimationInterval) {
+        clearInterval(mouthAnimationInterval);
+        mouthAnimationInterval = null;
     }
 }
 
@@ -273,20 +321,22 @@ function tapCharacter() {
     quickAction("Namaste Vadi! What cool topic are we exploring today?");
 }
 
+// ── Core Voice Turn Triggering (/api/v1/voice/turn Direct Connection) ────
 async function quickAction(text) {
+    interruptPlayback();
+
     const captionSub = document.getElementById('caption-sub');
     stopTypingAnimation(captionSub);
 
     // Render user speech bubble
     addChatBubble('user', text);
     
-    captionSub.innerHTML = `Vadi is thinking <span class="typing-indicator"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></span>`;
-    setMouthState('listening');
+    setAvatarState('thinking');
 
     try {
         if (!authToken) await initAuth();
 
-        const res = await fetch('/api/v1/turn', {
+        const res = await fetch('/api/v1/voice/turn', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -298,34 +348,40 @@ async function quickAction(text) {
                 tenant_id: tenantId,
                 learner_id: learnerId,
                 age_band: ageBand,
-                message_text: text,
-                language: 'hi',
-                mood: currentMood
+                text_fallback: text,
+                language: 'hi'
             })
         });
 
         if (res.ok) {
             const data = await res.json();
+            
+            // Check Fail-Closed Safety Verdicts (PRD §8, SD §4)
             if (data.safety_verdict && data.safety_verdict !== 'safe') {
                 const safetyMsg = "Safety check triggered. Let's talk about something positive or ask a guardian for help!";
                 addChatBubble('vadi', safetyMsg);
-                captionSub.innerText = "Safety check triggered.";
-                setMouthState('idle');
+                if (captionSub) captionSub.innerText = "Safety check triggered.";
+                setAvatarState('idle');
+                stopVisualizer();
                 return;
             }
-            const reply = data.final_reply || "Main tumhare saath hoon! Let's explore together!";
+
+            const reply = data.reply_text || data.final_reply || "Main tumhare saath hoon! Let's explore together!";
             addChatBubble('vadi', reply);
-            await speakReply(reply);
+            
+            // Play audio response directly from voice turn response if available
+            await speakReply(reply, data.audio_response_base64);
         } else {
-            throw new Error(`Turn request failed with status ${res.status}`);
+            throw new Error(`Voice turn request failed with status ${res.status}`);
         }
     } catch (e) {
-        console.error('Turn execution error:', e);
+        console.error('Voice turn execution error:', e);
         // Fail-closed safety behavior per PRD
         const failClosedMsg = "Connection or safety check interrupted. Please ask your guardian or try again later.";
         addChatBubble('vadi', failClosedMsg);
-        captionSub.innerText = "Connection interrupted.";
-        setMouthState('idle');
+        if (captionSub) captionSub.innerText = "Connection interrupted.";
+        setAvatarState('idle');
+        stopVisualizer();
     }
 }
 
@@ -333,6 +389,9 @@ function toggleVoice() {
     const btn = document.getElementById('mic-trigger-btn');
     const ring = document.getElementById('mic-pulsing-ring');
     const captionSub = document.getElementById('caption-sub');
+
+    // Barge-in: interrupting current speaking/audio playback
+    interruptPlayback();
 
     if (isListening) {
         if (recognition) {
@@ -343,8 +402,7 @@ function toggleVoice() {
         if (ring) ring.classList.remove('active');
         stopMicStream();
         stopVisualizer();
-        if (captionSub) captionSub.innerText = "Tap me or the mic button below to talk!";
-        setMouthState('idle');
+        setAvatarState('idle');
         return;
     }
 
@@ -352,13 +410,6 @@ function toggleVoice() {
     if (!SpeechRecognition) {
         if (captionSub) captionSub.innerText = "Microphone input not supported in this browser. Please tap an option below!";
         return;
-    }
-
-    if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-        currentAudio = null;
-        stopVisualizer();
     }
 
     isListening = true;
@@ -370,8 +421,7 @@ function toggleVoice() {
         isListening = true;
         if (btn) btn.classList.add('listening');
         if (ring) ring.classList.add('active');
-        if (captionSub) captionSub.innerText = "Listening... Speak now!";
-        setMouthState('listening');
+        setAvatarState('listening');
 
         try {
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -406,8 +456,7 @@ function toggleVoice() {
         if (ring) ring.classList.remove('active');
         stopMicStream();
         stopVisualizer();
-        if (captionSub) captionSub.innerText = "Tap me or the mic button below to talk!";
-        setMouthState('idle');
+        setAvatarState('idle');
     };
 
     try {
@@ -419,66 +468,73 @@ function toggleVoice() {
         if (ring) ring.classList.remove('active');
         stopMicStream();
         stopVisualizer();
-        if (captionSub) captionSub.innerText = "Tap me or the mic button below to talk!";
-        setMouthState('idle');
+        setAvatarState('idle');
     }
 }
 
-async function speakReply(text) {
+async function speakReply(text, providedAudioBase64 = null) {
     const captionSub = document.getElementById('caption-sub');
     const cleanText = text.replace(/Vadi:\s*/gi, '').replace(/\(.*?\)/gi, '').trim();
     
     animateTyping(captionSub, cleanText);
-    setMouthState('speaking');
+    setAvatarState('speaking');
 
-    if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-        currentAudio = null;
+    let audioBase64 = providedAudioBase64;
+
+    // Fetch TTS audio if not provided in voice turn response
+    if (!audioBase64) {
+        try {
+            const res = await fetch('/api/v1/voice/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: cleanText, language: 'hi' })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                audioBase64 = data.audio_base64;
+            }
+        } catch (e) {
+            console.error('TTS streaming fetch error:', e);
+        }
     }
 
-    try {
-        const res = await fetch('/api/v1/voice/tts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: cleanText, language: 'hi' })
-        });
-
-        if (res.ok) {
-            const data = await res.json();
-            if (data.audio_base64) {
-                currentAudio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
-                
-                try {
-                    const { audioCtx, analyser } = getAudioContext();
-                    audioMediaSource = audioCtx.createMediaElementSource(currentAudio);
-                    startVisualizer(audioMediaSource, true);
-                } catch (e) {
-                    console.warn('MediaElementSource visualizer setup note:', e);
-                }
-
-                currentAudio.onended = () => {
-                    setMouthState('idle');
-                    stopVisualizer();
-                };
-                currentAudio.onerror = () => {
-                    console.error('Audio playback error');
-                    setMouthState('idle');
-                    stopVisualizer();
-                };
-                await currentAudio.play();
-                return;
-            }
+    if (audioBase64) {
+        currentAudio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
+        
+        try {
+            const { audioCtx, analyser } = getAudioContext();
+            audioMediaSource = audioCtx.createMediaElementSource(currentAudio);
+            startVisualizer(audioMediaSource, true);
+        } catch (e) {
+            console.warn('MediaElementSource visualizer setup note:', e);
         }
-    } catch (e) {
-        console.error('TTS streaming error:', e);
+
+        currentAudio.onended = () => {
+            currentAudio = null;
+            setAvatarState('idle');
+            stopVisualizer();
+        };
+        currentAudio.onerror = () => {
+            console.error('Audio playback error');
+            currentAudio = null;
+            setAvatarState('idle');
+            stopVisualizer();
+        };
+
+        try {
+            await currentAudio.play();
+            return;
+        } catch (e) {
+            console.warn('Audio autoplay blocked or interrupted:', e);
+        }
     }
 
     if (captionSub) {
         stopTypingAnimation(captionSub);
         captionSub.innerText = `${cleanText}`;
     }
-    setMouthState('idle');
+    setAvatarState('idle');
     stopVisualizer();
 }
 

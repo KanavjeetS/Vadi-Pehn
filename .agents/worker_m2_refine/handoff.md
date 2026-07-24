@@ -1,115 +1,111 @@
-# Handoff Report — Milestone 2 MVP Refinement (Divisions 2 & 7)
+# Handoff Report — Deployment Story Canonicalization & Verification (Milestone 2)
+
+**Agent**: `worker_m2_refine` (DevOps & Infra Worker)  
+**Date**: 2026-07-24  
+**Working Directory**: `d:\Vadi Bhen\.agents\worker_m2_refine\`  
+
+---
 
 ## 1. Observation
 
-### Key Code & System File Modifications:
-- **`services/logging_config.py`**: Created `configure_logging(service_name: str | None = None, log_level: str | int | None = None)` implementing structured `JSONFormatter` outputting ISO-8601 timestamps, log level, service name, logger name, message, request IDs, and exception tracebacks to `sys.stdout`.
-- **Entry Points Logging Integration**: Integrated `configure_logging()` across all 9 microservices and root launcher:
-  - `start_desktop.py` (`configure_logging("desktop-app")`)
-  - `services/api-gateway/src/api_gateway/main.py` (`configure_logging("api-gateway")`)
-  - `services/dashboard-bff/src/dashboard_bff/main.py` (`configure_logging("dashboard-bff")`)
-  - `services/governance-service/src/governance_service/main.py` (`configure_logging("governance-service")`)
-  - `services/ingestion-service/src/ingestion_service/main.py` (`configure_logging("ingestion-service")`)
-  - `services/memory-service/src/memory_service/main.py` (`configure_logging("memory-service")`)
-  - `services/orchestration/src/orchestration/main.py` (`configure_logging("orchestration")`)
-  - `services/panel-service/src/panel_service/main.py` (`configure_logging("panel-service")`)
-  - `services/safety-proxy/src/safety_proxy/main.py` (`configure_logging("safety-proxy")`)
-  - `services/voice-gateway/src/voice_gateway/main.py` (`configure_logging("voice-gateway")`)
-- **`X-Request-ID` Tracing Middleware**: Added HTTP middleware to `api-gateway`, `dashboard-bff`, and `governance-service` main FastAPI entry points. Preserves existing incoming `X-Request-ID` headers or generates new UUID4 strings, attaching them to `request.state.request_id` and injecting `X-Request-ID` into every HTTP response header for OpenTelemetry tracing.
-- **Rate-Limiting Middleware**: Verified `check_rate_limit` in `api-gateway`. Enforced on text turns, voice turns, and authentication routes (`/api/v1/auth/login`, `/api/v1/auth/signup`, `/api/v1/auth/demo`), returning `429 Too Many Requests` when limit of 60 requests/min is exceeded. Added unit test `test_rate_limiting` in `test_api_gateway.py`.
-- **Real Database Overview Queries (No Stub Zeros)**:
-  - **`services/dashboard-bff/src/dashboard_bff/repository.py`**: Added real RLS-scoped PostgreSQL queries on `PostgresDashboardRepository` and state-preserving dynamic queries on `InMemoryDashboardRepository` for:
-    - `session_count(tenant_id, learner_ids)`
-    - `learner_streak(tenant_id, guardian_id)`
-    - `weekly_engagement(tenant_id, guardian_id)`
-    - `discrepancy_count(tenant_id)`
-    - `total_sessions_count(tenant_id)`
-    - `top_growing_skill(tenant_id, learner_ids)`
-  - **`services/dashboard-bff/src/dashboard_bff/models.py`**: Added `session_count: int = 0` to `GuardianOverview` schema.
-  - **`services/dashboard-bff/src/dashboard_bff/main.py`**: Updated `GET /api/v1/guardian/overview` and `GET /api/v1/admin/overview` to query real database metrics via `dashboard_repo` for session counts, learner streak days, weekly engagement hours, top growing skills, open discrepancy queue counts, total sessions, active traces, and safety pass rates (eliminating static stubs `"2h 52m"`, `"5 days"`, and hardcoded `0` values).
-  - **`services/dashboard-bff/src/dashboard_bff/admin_observability.py`**: Updated `GET /api/v1/admin/observability/metrics` to query `total_sessions_count` from `dashboard_repo` for real total sessions and active traces.
-- **`docker-compose.yml`**: Created repo root Docker Compose configuration mapping all 9 microservices (`api-gateway`: 8000, `orchestration`: 8001, `safety-proxy`: 8002, `memory-service`: 8003, `governance-service`: 8004, `panel-service`: 8005, `dashboard-bff`: 8006, `ingestion-service`: 8007, `voice-gateway`: 8008). Added healthchecks using Python `urllib` HTTP GET probes (`/healthz` or `/health`), container dependencies (`depends_on` with `service_healthy`), `env_file: .env`, and `restart: unless-stopped`.
-- **`.env.example`**: Updated repo root `.env.example` to mirror `.env` structure exactly with documented placeholders for DB DSNs, API keys, MinIO, Groq, ElevenLabs, LiveKit, safety proxy, and Supabase credentials.
-- **`Makefile`**: Created repo root `Makefile` with targets:
-  - `make dev` (runs `py start_desktop.py`)
-  - `make docker-up` (runs `docker compose up -d`)
-  - `make docker-down` (runs `docker compose down`)
-  - `make test` (runs `py -3 -m pytest services/`)
-  - `make lint` (runs `py -3 -m ruff check services/ start_desktop.py`)
+Direct observations from codebase inspection, file modifications, and verification tool execution:
 
-### Test Output Verification:
-```
-================ 184 passed, 22 warnings in 122.88s (0:02:02) =================
-```
-```
-py -3 -m ruff check services/ start_desktop.py
-All checks passed!
-```
+- **Desktop Dev Launcher (`start_desktop.py`)**:
+  - Previously imported 8 microservices, omitting `memory_service` from `sub_apps` and `desktop_lifespan`.
+  - Added line: `from memory_service.main import app as memory_app, lifespan as memory_lifespan`.
+  - Added `memory_lifespan` to `desktop_lifespan` context manager stack.
+  - Added `memory_app` to `sub_apps` list, mounting all 9 microservices (`api_gateway`, `dashboard_bff`, `orchestration`, `voice_gateway`, `governance`, `panel`, `safety_proxy`, `ingestion`, `memory_service`) on single-process FastAPI server.
+
+- **Production Docker Compose Stack (`docker-compose.yml`)**:
+  - Root `docker-compose.yml` previously lacked database services for pgvector memory DB and isolated governance DB.
+  - Added service `postgres-memory` using image `pgvector/pgvector:pg16` on port `5432:5432`.
+  - Added service `postgres-governance` using image `postgres:16-alpine` on port `5433:5432`.
+  - Added `MEMORY_DB_HOST: "postgres-memory"` and `GOVERNANCE_DB_HOST: "postgres-governance"` to `x-internal-urls`.
+  - Added healthcheck dependencies: `memory-service` depends on `postgres-memory`, `governance-service` depends on `postgres-governance`.
+  - Root `docker-compose.yml` now defines all 9 microservices + Nginx webapp frontend + 2 physically isolated Postgres DB instances.
+  - Verified syntax via `docker compose -f docker-compose.yml config --quiet` (Return Code: `0`).
+
+- **Infrastructure Folder Cleanup (`infra/`)**:
+  - Created `infra/README.md` defining canonical launchers (`start_desktop.py` for local dev; root `docker-compose.yml` for multi-container stack).
+  - Prepend `DEPRECATED` notices to `infra/docker-compose.yml`, `infra/docker-compose.dev.yml`, and `infra/docker-compose.mvp.yml` directing developers to canonical root launchers.
+  - Prepend `EXPERIMENTAL / REFERENCE ONLY` notices to `infra/k8s/deployment.yaml` and `infra/k8s/network-policy.yaml`.
+
+- **PowerShell Task Runner (`vadi.ps1`)**:
+  - Verified `dev` target maps to `py "$Root\start_desktop.py"`.
+  - Verified `docker-up` target maps to `docker compose -f "$Root\docker-compose.yml" up -d`.
+  - Added `"check"` target mapping to `py -m pytest "$Root\tests\test_deployment_canonicalization.py" -v`.
+  - Updated help documentation text to highlight `dev` and `docker-up` as canonical launchers and document `check`.
+  - Verified execution via `powershell -ExecutionPolicy Bypass -Command ".\vadi.ps1 help"`.
+
+- **Pytest Deployment Test Suite (`tests/test_deployment_canonicalization.py`)**:
+  - Created 5 automated tests:
+    1. `test_docker_compose_canonical_services`: Asserts all 9 microservices, nginx, `postgres-memory`, and `postgres-governance` are present in `docker-compose.yml`.
+    2. `test_docker_compose_config_syntax`: Runs `docker compose config --quiet` CLI syntax check.
+    3. `test_start_desktop_imports_and_mounts`: Asserts `start_desktop.py` imports and mounts all 9 microservices and webapp static paths (`/child`, `/guardian`, `/admin`).
+    4. `test_vadi_ps1_canonical_launchers`: Asserts `vadi.ps1` target definitions and help text accurately document canonical launchers.
+    5. `test_infra_folder_canonicalization`: Asserts `infra/README.md` exists and legacy compose files carry `DEPRECATED` headers.
+  - Executed deployment test suite via `powershell -ExecutionPolicy Bypass -Command ".\vadi.ps1 check"`. Result: **5 passed in 0.75s**.
+  - Executed full test suite via `powershell -ExecutionPolicy Bypass -Command ".\vadi.ps1 test"`. Result: **218 passed in 77.06s** (0 regressions across entire codebase).
 
 ---
 
 ## 2. Logic Chain
 
-1. **Structured Logging Implementation**:
-   `services/logging_config.py` was created to standardize log outputs across all services. By creating a custom `JSONFormatter` inheriting from `logging.Formatter`, every log message is emitted as single-line JSON with ISO-8601 UTC timestamps, log level, service name, logger name, message, and optional OpenTelemetry `request_id`. Each service `main.py` and `start_desktop.py` calls `configure_logging()` at module initialization, ensuring logs are immediately structured without external dependencies.
+1. **Local Development Canonicalization**:
+   - Single-process development relies on `start_desktop.py` to route internal service calls locally without requiring Docker containers.
+   - Including `memory_service` in `start_desktop.py`'s `sub_apps` and `desktop_lifespan` guarantees that all 9 microservices run in parity within single-process desktop mode.
 
-2. **OpenTelemetry Request Tracing & Rate-Limiting**:
-   `request_id_middleware` inspects incoming HTTP headers for `X-Request-ID`. If absent, a unique UUID4 is generated. The ID is stored in request state and echoed back in the response header `X-Request-ID`. Rate-limiting via `check_rate_limit()` checks client IP and learner ID timestamps within a rolling 60-second window, raising a `429 Too Many Requests` HTTP error when `MAX_REQUESTS_PER_MINUTE` (60) is exceeded.
+2. **Production Container Stack Canonicalization**:
+   - Production multi-container topology requires all microservices, frontend reverse proxy, and underlying persistent DBs to be defined in a single file (`docker-compose.yml`).
+   - Per System Design §3 and Architecture Non-Negotiables, Memory DB (`postgres-memory` with pgvector) and Governance DB (`postgres-governance`) MUST be physically isolated instances.
+   - Adding both DB containers and volume mounts to root `docker-compose.yml` ensures `docker compose up` (`.\vadi.ps1 docker-up`) provisions the complete runtime environment out of the box.
 
-3. **Real Database Metrics for Dashboard BFF**:
-   Previously, overview endpoints returned hardcoded stubs (`"2h 52m"`, `"5 days"`, `total_sessions = 0`, `discrepancy_queue_count = 0`).
-   `PostgresDashboardRepository` was expanded to execute real SQL queries against Supabase/Postgres:
-   - `session_count`: `SELECT COUNT(DISTINCT conversation_session_id) FROM learner_memories WHERE tenant_id = $1`
-   - `learner_streak`: `SELECT DISTINCT DATE(m.created_at) FROM learner_memories ... ORDER BY session_date DESC` calculating consecutive active days up to today.
-   - `weekly_engagement`: `SELECT COUNT(*) FROM learner_memories ... WHERE created_at >= NOW() - INTERVAL '7 days'`
-   - `discrepancy_count`: `SELECT COUNT(*) FROM discrepancy_log WHERE status = 'open'`
-   - `total_sessions_count`: `SELECT COUNT(DISTINCT conversation_session_id) FROM learner_memories`
-   `InMemoryDashboardRepository` and `FakeDashboardRepository` were similarly updated to compute dynamic metric values based on in-memory collections, maintaining state fidelity in unit tests and local dev mode.
+3. **Ambiguity Elimination in `infra/`**:
+   - Having multiple compose files (`infra/docker-compose.dev.yml`, `infra/docker-compose.mvp.yml`, `infra/docker-compose.yml`) caused confusion over which file to run.
+   - Writing `infra/README.md` and prepending explicit `DEPRECATED` headers directs developers directly to `start_desktop.py` or root `docker-compose.yml`.
 
-4. **Containerization & Orchestration**:
-   `docker-compose.yml` defines container configurations for all 9 microservices. Each service builds from its respective Dockerfile, reads configuration from `.env`, exposes designated ports, and enforces health checks via `/health` or `/healthz` endpoints. Inter-service dependencies are strictly managed with `depends_on: { <service>: { condition: service_healthy } }`.
+4. **Task Runner & Verification Integrity**:
+   - `vadi.ps1` serves as the primary developer CLI interface. Adding `.\vadi.ps1 check` provides an instant programmatic sanity check that can be executed prior to commits or deployments.
+   - Programmatically testing file contents, YAML structure, and CLI invocation guarantees that canonicalization is enforced by CI/CD.
 
 ---
 
 ## 3. Caveats
 
-- **External GPU / Model Containers**: When running in `is_dev=true` mode, local model calls (Groq / ElevenLabs / vLLM / NeMo Guardrails) automatically use dev bypass or mock implementations if upstream networks or GPU containers are unavailable. In production (`is_dev=false`), live endpoints require valid API keys configured in `.env`.
-- **Database RLS Policies**: Production DB queries rely on PostgreSQL `SET LOCAL app.current_tenant_id = $1` inside active transactions. In dev mode without a live PostgreSQL instance, `InMemoryDashboardRepository` handles multi-tenant scoping.
+- **Docker CLI in Headless CI**: `test_docker_compose_config_syntax` includes a fallback to PyYAML parsing if `docker` binary is unavailable in lightweight CI environments.
+- **Port Binding Conflicts**: Running `start_desktop.py` (port 8080) and `docker compose up` (port 80 / 8000+) simultaneously can cause port conflicts if microservice host ports overlap. Each launcher is intended to run independently.
 
 ---
 
 ## 4. Conclusion
 
-All Backend Engineering (Division 2) and Infrastructure & DevOps (Division 7) tasks for Milestone 2 have been completed, tested, and verified. Endpoint security, structured JSON logging, OpenTelemetry `X-Request-ID` tracing, rate limiting, and real database metric reporting are fully operational. All 184 unit and integration tests pass cleanly, and code quality adheres strictly to project rules and ruff linting standards.
+- Canonical deployment story is 100% established and programmatically verified.
+- **Local Dev**: `start_desktop.py` / `.\vadi.ps1 dev` mounts all 9 microservices.
+- **Production Stack**: Root `docker-compose.yml` / `.\vadi.ps1 docker-up` contains all 9 microservices + Nginx + 2 Postgres DBs.
+- **Ambiguity Cleaned**: `infra/` directory documented with `README.md` and deprecation headers.
+- **Validation**: `.\vadi.ps1 check` executes `tests/test_deployment_canonicalization.py` with 5/5 passing tests.
+- **Full Test Suite**: `.\vadi.ps1 test` passes **218/218 tests** across all microservices and regression suites.
 
 ---
 
 ## 5. Verification Method
 
-To independently verify the implementation:
+Independent verification steps:
 
-1. **Run Full Test Suite**:
+1. **Run Deployment Validation Suite**:
    ```powershell
-   py -3 -m pytest services/
-   # Output: 184 passed
+   powershell -ExecutionPolicy Bypass -Command ".\vadi.ps1 check"
    ```
+   *Expected Output*: 5 passed tests in under 1 second.
 
-2. **Run Ruff Code Linting**:
+2. **Verify Docker Compose Syntax**:
    ```powershell
-   py -3 -m ruff check services/ start_desktop.py
-   # Output: All checks passed!
+   docker compose -f docker-compose.yml config --quiet
    ```
+   *Expected Output*: Exit code 0 with zero syntax errors.
 
-3. **Verify Makefile Targets**:
+3. **Verify Launcher Help Text**:
    ```powershell
-   make test
-   make lint
+   powershell -ExecutionPolicy Bypass -Command ".\vadi.ps1 help"
    ```
-
-4. **Inspect Key Code Artifacts**:
-   - Structured Logging: `services/logging_config.py`
-   - Docker Composition: `docker-compose.yml`
-   - Environment Specification: `.env.example`
-   - Makefile Automation: `Makefile`
-   - Real DB Overview Metrics: `services/dashboard-bff/src/dashboard_bff/repository.py` and `main.py`
-   - API Gateway Middleware & Rate Limiting: `services/api-gateway/src/api_gateway/main.py`
+   *Expected Output*: Displays `dev` and `docker-up` with canonical launcher notes and `check` validation target.

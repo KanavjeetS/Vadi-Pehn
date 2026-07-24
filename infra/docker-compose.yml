@@ -1,3 +1,8 @@
+# DEPRECATED — DO NOT USE FOR PRIMARY DEPLOYMENTS
+# Canonical production docker-compose definition is located at root: ../docker-compose.yml
+# To run full stack: .\vadi.ps1 docker-up (or docker compose -f docker-compose.yml up -d)
+# To run dev server: .\vadi.ps1 dev (or python start_desktop.py)
+#
 version: '3.8'
 
 services:

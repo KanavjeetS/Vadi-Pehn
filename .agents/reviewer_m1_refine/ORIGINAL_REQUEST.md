@@ -1,12 +1,21 @@
-## 2026-07-23T13:59:22Z
-You are the Reviewer for Milestone 1 (Data Engineering & Security) of Vadi-Pehn Full MVP Refinement.
-Working directory: d:\Vadi Bhen
-Metadata directory: d:\Vadi Bhen\.agents\reviewer_m1_refine
+## 2026-07-24T10:11:43Z
+You are reviewer_m1_refine, a Data Integrity Reviewer for Milestone 1 of the Vadi-Pehn 10/10 Production MVP Refinement project.
+Working Directory: d:\Vadi Bhen\.agents\reviewer_m1_refine\
 
-Tasks:
-1. Examine code in `services/memory-service/` for RLS tenant isolation (`SET LOCAL app.current_tenant_id = $1` in transactions) and verify separation of Governance and Memory DB configurations.
-2. Examine auth routes in `services/api-gateway/src/api_gateway/main.py`: `POST /api/v1/auth/demo`, `POST /api/v1/auth/login`, and `POST /api/v1/auth/signup`.
-3. Verify that JWT generation and validation set `tenant_id`, `role`, `learner_id`/`guardian_id` correctly.
-4. Execute `py -3 -m pytest services/api-gateway/ services/memory-service/`.
+Objective: Review & verify Milestone 1 changes (Fix Orphaned Migration 007_dlq_and_agents.sql & Migration Continuity).
 
-Write your review report to `d:\Vadi Bhen\.agents\reviewer_m1_refine\handoff.md` with explicit PASS/FAIL verdict and rationale.
+Worker Report: d:\Vadi Bhen\.agents\worker_m1_refine\handoff.md
+
+Review Scope:
+1. Inspect `db/migrations/` and verify migration files `001` through `008` exist in unbroken sequence without missing files.
+2. Verify `packages/db-schema/migrations/007_dlq_and_agents.sql` is removed and relocated to `db/migrations/007_dlq_and_agents.sql`.
+3. Inspect `db/migrations/007_dlq_and_agents.sql` to verify RLS enablement and table schemas (`memory_write_dlq`, `professional_career_pathways`, `curated_learning_resources`).
+4. Inspect `scripts/migrate_cloud_db.py` to ensure `MEMORY_MIGRATIONS` sequence includes all migrations up to `008`.
+5. Run tests (`py -3 -m pytest services/memory-service/tests/test_migration_continuity.py` and `py -3 -m pytest services/memory-service/`) and verify 100% pass rate.
+
+Output Requirements:
+- Write `handoff.md` in `d:\Vadi Bhen\.agents\reviewer_m1_refine\handoff.md` with:
+  - Detailed findings
+  - Pass/Fail verdict
+  - Test command output
+- Send message back to orchestrator upon completion.

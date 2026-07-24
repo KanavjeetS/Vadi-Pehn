@@ -214,7 +214,7 @@ class VoiceTurnPayload(BaseModel):
     session_id: str
     tenant_id: str
     learner_id: str
-    age_band: int
+    age_band: int = Field(default=2, ge=1, le=3)
     audio_data_base64: str | None = None
     text_fallback: str | None = None
     language: str = "hi"
@@ -620,9 +620,11 @@ async def handle_direct_tts(payload: TTSPayload) -> dict[str, Any]:
                     "status": "success",
                 }
         except Exception as exc:
-            logger.warn(f"ElevenLabs API direct synthesis failed: {exc}")
+            logger.warning(f"ElevenLabs API direct synthesis failed: {exc}")
 
     return {"audio_base64": None, "format": "none", "status": "fallback"}
+
+
 @app.post("/api/v1/guardian/consent")
 async def update_consent(
     payload: ConsentPayload,

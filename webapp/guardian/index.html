@@ -682,60 +682,9 @@
 
     <script src="guardian.js"></script>
     <script>
-        // Initialize Charts & Overview
+        // Initialize Overview & Dynamic Charts
         window.addEventListener('DOMContentLoaded', () => {
             fetchGuardianOverview();
-
-            const engCtx = document.getElementById('engagementChart').getContext('2d');
-            const engGrad = engCtx.createLinearGradient(0, 0, 0, 200);
-            engGrad.addColorStop(0, 'rgba(124, 58, 237, 0.35)');
-            engGrad.addColorStop(1, 'rgba(124, 58, 237, 0.0)');
-
-            new Chart(engCtx, {
-                type: 'line',
-                data: {
-                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                    datasets: [{
-                        data: [18, 24, 12, 28, 20, 36, 22],
-                        borderColor: '#7c3aed',
-                        borderWidth: 3,
-                        fill: true,
-                        backgroundColor: engGrad,
-                        tension: 0.45,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#7c3aed'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
-                        y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8' }, min: 0 }
-                    }
-                }
-            });
-
-            const moodCtx = document.getElementById('moodChart').getContext('2d');
-            new Chart(moodCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Curious (45%)', 'Calm (30%)', 'STEM/Robotics (15%)', 'Creative Arts (10%)'],
-                    datasets: [{
-                        data: [45, 30, 15, 10],
-                        backgroundColor: ['#7c3aed', '#00bbf9', '#10b981', '#ec4899'],
-                        borderWidth: 2,
-                        borderColor: '#ffffff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom', labels: { color: '#475569', font: { size: 11 } } } },
-                    cutout: '70%'
-                }
-            });
         });
     </script>
 </body>

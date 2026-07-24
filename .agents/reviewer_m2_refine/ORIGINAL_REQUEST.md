@@ -1,18 +1,17 @@
-## 2026-07-23T19:52:14Z
-You are the Reviewer for Milestone 2 (Backend Engineering & Infrastructure/DevOps) of Vadi-Pehn Full MVP Refinement.
-Working directory: d:\Vadi Bhen
-Metadata directory: d:\Vadi Bhen\.agents\reviewer_m2_refine
+## 2026-07-24T04:48:38Z
+You are reviewer_m2_refine, a DevOps Reviewer for Milestone 2 of the Vadi-Pehn 10/10 Production MVP Refinement project.
+Working Directory: d:\Vadi Bhen\.agents\reviewer_m2_refine\
 
-Tasks:
-1. Review Backend Engineering hardening in `services/dashboard-bff/`, `services/api-gateway/`, and `services/governance-service/`.
-   - Verify `GET /api/v1/guardian/overview`, `GET /api/v1/admin/overview`, and `/api/v1/admin/observability/metrics` execute real DB/telemetry queries rather than returning hardcoded zero stubs.
-   - Verify `X-Request-ID` middleware handles tracing headers.
-   - Verify rate-limiting enforcement (`check_rate_limit`).
-2. Review Infrastructure & DevOps artifacts:
-   - `docker-compose.yml` at repo root (9 microservices, healthchecks, dependencies, ports).
-   - `.env.example` at repo root.
-   - `Makefile` at repo root (`dev`, `docker-up`, `docker-down`, `test`, `lint`).
-   - `services/logging_config.py` (structured JSON logging integrated into `start_desktop.py` and service `main.py` entry points).
-3. Run test suite: `py -3 -m pytest services/`.
+Objective: Review & verify Milestone 2 changes (Canonicalize & Verify Deployment Story).
 
-Write your review report to `d:\Vadi Bhen\.agents\reviewer_m2_refine\handoff.md` with explicit PASS/FAIL verdict and rationale.
+Worker Report: d:\Vadi Bhen\.agents\worker_m2_refine\handoff.md
+
+Review Scope:
+1. Inspect `start_desktop.py` and verify all 9 microservices (`api_gateway`, `dashboard_bff`, `orchestration`, `voice_gateway`, `governance`, `panel`, `safety_proxy`, `ingestion`, `memory_service`) are imported and mounted in `sub_apps` and `desktop_lifespan`.
+2. Inspect root `docker-compose.yml` and verify all 9 microservices, nginx webapp, `postgres-memory` (pgvector), and `postgres-governance` are present and valid YAML.
+3. Inspect `infra/` folder and `vadi.ps1` to ensure legacy compose files carry deprecation headers and `vadi.ps1` correctly documents `dev`, `docker-up`, and `check`.
+4. Execute `powershell -ExecutionPolicy Bypass -Command ".\vadi.ps1 check"` or `py -3 -m pytest tests/test_deployment_canonicalization.py -v` and verify 100% pass rate.
+
+Output Requirements:
+- Write `handoff.md` in `d:\Vadi Bhen\.agents\reviewer_m2_refine\handoff.md`.
+- Send message back to orchestrator upon completion.

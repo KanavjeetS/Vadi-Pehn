@@ -12,7 +12,9 @@ import sys
 import os
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
+
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -45,6 +47,71 @@ def test_guardian_overview_endpoint() -> None:
     assert len(data["learners"]) == 1
     assert data["learners"][0]["relationship_health_trend"] == "healthy"
     assert data["consent_status"]["conversation_storage"]
+    assert "session_trends" in data
+    assert isinstance(data["session_trends"], list)
+    assert "topic_distribution" in data
+    assert isinstance(data["topic_distribution"], list)
+
+
+def test_guardian_overview_session_trends_and_topics() -> None:
+    """Verifies that Guardian overview populates session trends, topics, consent states, and incident timelines."""
+    tenant_id = str(uuid4())
+    guardian_id = str(uuid4())
+
+    token = create_jwt_token(user_id=guardian_id, tenant_id=tenant_id, role="guardian")
+    res = client.get(
+        "/api/v1/guardian/overview", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert res.status_code == 200
+    data = res.json()
+
+    # Session trends verify 7-day breakdown
+    trends = data["session_trends"]
+    assert len(trends) == 7
+    assert "day" in trends[0]
+    assert "minutes" in trends[0]
+
+    # Topic distribution verify domain items
+    topics = data["topic_distribution"]
+    assert len(topics) >= 1
+    assert "topic" in topics[0]
+    assert "percentage" in topics[0]
+
+    # Consent states verify active flags
+    assert isinstance(data["consent_status"], dict)
+
+    # Incident timeline list structure verify
+    assert isinstance(data["safety_incidents"], list)
+
+
+@pytest.mark.asyncio
+async def test_in_memory_repository_dynamic_metrics() -> None:
+    """Verifies that InMemoryDashboardRepository dynamically calculates repository metric queries."""
+    from dashboard_bff.repository import InMemoryDashboardRepository
+    from uuid import UUID
+    repo = InMemoryDashboardRepository()
+    tenant_id = UUID("00000000-0000-0000-0000-000000000001")
+    guardian_id = UUID("00000000-0000-0000-0000-000000000002")
+
+    # Initial session trends check
+    trends = await repo.session_trends(tenant_id, guardian_id)
+    assert len(trends) == 7
+    assert all("day" in t and "minutes" in t for t in trends)
+
+    # Initial topic distribution check
+    topics = await repo.topic_distribution(tenant_id)
+    assert len(topics) >= 1
+    assert all("topic" in t and "percentage" in t for t in topics)
+
+    # Session count and streak check
+    sc = await repo.session_count(tenant_id)
+    assert sc >= 1
+    streak = await repo.learner_streak(tenant_id, guardian_id)
+    assert "day" in streak
+
+
+
 
 
 def test_admin_overview_endpoint() -> None:

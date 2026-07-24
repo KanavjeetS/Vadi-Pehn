@@ -22,6 +22,17 @@ class LearnerActivitySummary(BaseModel):
     )
 
 
+class SessionTrendItem(BaseModel):
+    day: str
+    minutes: int
+
+
+class TopicDistributionItem(BaseModel):
+    topic: str
+    percentage: float
+    count: int = 0
+
+
 class GuardianOverview(BaseModel):
     guardian_id: UUID
     tenant_id: UUID
@@ -33,7 +44,9 @@ class GuardianOverview(BaseModel):
     most_common_mood: str = "Curious"
     top_growing_skill: str = "World exposure"
     consent_status: dict[str, bool]
-    safety_incidents: list[IncidentSummary] = []
+    safety_incidents: list[IncidentSummary] = Field(default_factory=list)
+    session_trends: list[SessionTrendItem] = Field(default_factory=list)
+    topic_distribution: list[TopicDistributionItem] = Field(default_factory=list)
 
 
 class IncidentSummary(BaseModel):

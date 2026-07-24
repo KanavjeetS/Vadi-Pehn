@@ -1,54 +1,50 @@
-# BRIEFING — 2026-07-23T19:59:00Z
+# BRIEFING — 2026-07-24T10:21:05Z
 
 ## Mission
-Review Milestone 2 (Backend Engineering & Infrastructure/DevOps) refinement for Vadi-Pehn.
+Review & verify Milestone 2 changes (Canonicalize & Verify Deployment Story) completed by `worker_m2_refine`.
 
 ## 🔒 My Identity
 - Archetype: reviewer / critic
 - Roles: reviewer, critic
-- Working directory: d:\Vadi Bhen\.agents\reviewer_m2_refine
-- Original parent: 6806281f-390a-455c-bb33-ad77644439be
-- Milestone: Milestone 2 Review
+- Working directory: d:\Vadi Bhen\.agents\reviewer_m2_refine\
+- Original parent: bbf841a6-925d-4b95-9cc3-f135728b712b
+- Milestone: Milestone 2 — Canonicalize & Verify Deployment Story
 - Instance: 1 of 1
 
 ## 🔒 Key Constraints
-- Review-only — do NOT modify implementation code
-- Integrity Check — inspect for hardcoded test results, facade implementations, dummy zero stubs, bypassed logic, or fake verification
-- Verification via running `py -3 -m pytest services/` and analyzing endpoints/artifacts
-- Write findings and verdict to `d:\Vadi Bhen\.agents\reviewer_m2_refine\handoff.md`
+- Review-only — do NOT modify implementation code unless fixing/testing in verification.
+- Must verify integrity, correctness, completeness, and quality of deployment changes.
+- Check for hardcoded test results, facade implementations, or bypasses.
 
 ## Current Parent
-- Conversation ID: 6806281f-390a-455c-bb33-ad77644439be
-- Updated: 2026-07-23T19:59:00Z
+- Conversation ID: bbf841a6-925d-4b95-9cc3-f135728b712b
+- Updated: 2026-07-24T10:21:05Z
 
 ## Review Scope
-- **Files to review**:
-  - `services/dashboard-bff/`
-  - `services/api-gateway/`
-  - `services/governance-service/`
-  - `docker-compose.yml`
-  - `.env.example`
-  - `Makefile`
-  - `services/logging_config.py`
-  - `start_desktop.py` and service `main.py` entry points
-- **Interface contracts**: `PROJECT.md` / `SystemDesign.md` / `AGENTS.md`
-- **Review criteria**: Correctness, real DB/telemetry queries, rate-limiting, request tracing, structured logging, docker-compose, pytest pass.
+- **Files to review**: `start_desktop.py`, `docker-compose.yml`, `infra/`, `vadi.ps1`, `tests/test_deployment_canonicalization.py`.
+- **Interface contracts**: System Design & PRD deployment specifications.
+- **Review criteria**: Correctness, completeness, style, layout compliance, security/architecture non-negotiables.
 
 ## Review Checklist
-- **Items reviewed**: Backend endpoints, tracing headers, rate limiter, docker-compose.yml, .env.example, Makefile, logging_config.py, full test suite.
-- **Verdict**: PASS / APPROVE
-- **Unverified claims**: None. All 184 tests executed independently and passed.
+- **Items reviewed**: `start_desktop.py`, `docker-compose.yml`, `infra/README.md`, legacy docker-compose files in `infra/`, `vadi.ps1`, `tests/test_deployment_canonicalization.py`.
+- **Verdict**: **APPROVE**
+- **Unverified claims**: None. All 4 scope items verified.
 
 ## Attack Surface
-- **Hypotheses tested**: Checked for dummy stubs, rate limit bypasses, tracing header missing paths, or test failures.
+- **Hypotheses tested**:
+  1. Missing service in `start_desktop.py`: False (all 9 present in imports, sub_apps, and lifespan).
+  2. Missing services or DBs in `docker-compose.yml`: False (all 9 microservices + nginx + postgres-memory + postgres-governance present).
+  3. Physical DB non-negotiables violated: False (postgres-memory and postgres-governance are distinct containers).
+  4. Ambiguous compose files in `infra/`: False (all legacy files marked DEPRECATED, README provided).
+  5. Test suite cheating/hardcoding: False (tests inspect code, validate YAML, run compose config CLI).
 - **Vulnerabilities found**: None.
 - **Untested angles**: None.
 
 ## Key Decisions Made
-- Milestone 2 Review completed with PASS verdict.
+- Issued **APPROVE** verdict after 100% test pass rate (5/5 tests in `.\vadi.ps1 check`).
+- Wrote full review report to `d:\Vadi Bhen\.agents\reviewer_m2_refine\handoff.md`.
 
 ## Artifact Index
-- `d:\Vadi Bhen\.agents\reviewer_m2_refine\ORIGINAL_REQUEST.md` — Original prompt
-- `d:\Vadi Bhen\.agents\reviewer_m2_refine\BRIEFING.md` — Briefing memory
-- `d:\Vadi Bhen\.agents\reviewer_m2_refine\progress.md` — Progress log
-- `d:\Vadi Bhen\.agents\reviewer_m2_refine\handoff.md` — Handoff report
+- `d:\Vadi Bhen\.agents\reviewer_m2_refine\ORIGINAL_REQUEST.md` — Original request log
+- `d:\Vadi Bhen\.agents\reviewer_m2_refine\BRIEFING.md` — Agent working memory
+- `d:\Vadi Bhen\.agents\reviewer_m2_refine\handoff.md` — Final Handoff Review Report

@@ -1,11 +1,9 @@
-# Vadi-Pehn — Docker Compose Dev Environment
-# Implements: SD §6.1 (MVP topology, dev variant)
-# Does NOT include: GPU-accelerated vLLM (run separately with vllm-serve)
+# DEPRECATED — DO NOT USE FOR PRIMARY DEPLOYMENTS
+# For local single-process development, use canonical launcher: .\vadi.ps1 dev (python start_desktop.py)
+# For containerized full-stack development/production, use: .\vadi.ps1 docker-up (root ../docker-compose.yml)
 #
-# Usage:
-#   docker compose -f infra/docker-compose.dev.yml up -d
-#   docker compose -f infra/docker-compose.dev.yml ps
-
+# Legacy file kept for reference only.
+#
 version: "3.9"
 
 networks:
