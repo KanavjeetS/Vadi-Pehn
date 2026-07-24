@@ -15,10 +15,13 @@ from uuid import uuid4
 root_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_dir))
 
+import pytest
+
 from services.abstractions import InMemoryVectorStore, MockLLMClient, MockSafetyClient
 from services.orchestration.src.orchestration.graph import OrchestrationGraph
 
 
+@pytest.mark.asyncio
 async def test_diversity_responses():
     print("[DIVERSITY TEST] Testing response diversity across 5 prompts...")
 
